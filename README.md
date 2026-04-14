@@ -197,7 +197,7 @@ Nombra los servicios exactamente asi para poder copiar y pegar las variables sin
 NODE_ENV=production
 DB_SYNC_ALTER=false
 JWT_SECRET=pon_aqui_un_secreto_largo_y_random
-INGEST_API_KEY=debe_coincidir_con_wokwi
+INGEST_API_KEY=wokwi-dev-ingest-key
 
 DB_HOST=${{MySQL.MYSQLHOST}}
 DB_PORT=${{MySQL.MYSQLPORT}}

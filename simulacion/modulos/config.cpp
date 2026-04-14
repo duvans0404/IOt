@@ -3,12 +3,15 @@
 const char* ssid     = "Wokwi-GUEST";
 const char* password = "";
 
-// En desarrollo local / Wokwi, usar BACKEND_LOCAL para enviar datos al backend local.
-// Cambia a BACKEND_PUBLIC y actualiza BACKEND_BASE_URL_PUBLIC para tu despliegue en Railway.
-const BackendMode BACKEND_MODE = BACKEND_LOCAL;
+// En este repo dejamos Railway como destino por defecto para evitar que Wokwi
+// siga apuntando a host.wokwi.internal cuando ya estas probando el despliegue.
+// Si quieres volver a local, cambia BACKEND_MODE a BACKEND_LOCAL.
+const BackendMode BACKEND_MODE = BACKEND_PUBLIC;
 const char* BACKEND_BASE_URL_LOCAL  = "http://host.wokwi.internal:3000";
-const char* BACKEND_BASE_URL_PUBLIC = "https://tu-app.railway.app";
+const char* BACKEND_BASE_URL_PUBLIC = "https://backend-production-bd4c6.up.railway.app";
 const char* DEVICE_NAME = "ESP32-WOKWI-01";
+// Esta clave debe ser EXACTAMENTE la misma que la variable INGEST_API_KEY del
+// servicio backend en Railway. Si no coincide, el backend responde 401.
 const char* INGEST_API_KEY = "wokwi-dev-ingest-key";
 const unsigned long BACKEND_SEND_INTERVAL_MS = 15000;
 
