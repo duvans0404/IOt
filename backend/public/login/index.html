@@ -2,42 +2,60 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Iniciar sesión - IoT Water Monitor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#060b0d" />
+    <meta name="description" content="Acceso seguro para operadores del sistema AquaSense." />
+    <title>AquaSense · Acceso operadores</title>
     <script src="../config.js" defer></script>
     <script src="../common.js" defer></script>
     <script src="./app.js" defer></script>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body data-page="login">
-    <div class="backdrop"></div>
-    <main class="shell login-shell">
+    <div class="backdrop" aria-hidden="true"></div>
+    <main class="shell login-shell shell--with-header">
+      <header class="site-header site-header--compact">
+        <a class="brand" href="../dashboard/">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-text">
+            <span class="brand-name">AquaSense</span>
+            <span class="brand-tagline">Acceso corporativo</span>
+          </span>
+        </a>
+        <nav class="site-nav" aria-label="Navegación principal">
+          <a href="../dashboard/">Monitor en vivo</a>
+          <a href="./" aria-current="page">Acceso operadores</a>
+        </nav>
+      </header>
+
       <section class="login-panel">
         <div class="hero-copy">
-          <p class="eyebrow">Wokwi + ESP32 + Railway</p>
-          <h1>Accede como operador.</h1>
+          <p class="eyebrow">Autenticación</p>
+          <h1>Portal de operadores</h1>
           <p class="subcopy">
-            Esta página está separada del dashboard público. Inicia sesión para confirmar alertas.
+            Credenciales requeridas para reconocer alertas y auditar intervenciones. El monitor público permanece disponible sin inicio de sesión.
           </p>
         </div>
 
         <article class="panel auth-panel">
           <div class="panel-head">
-            <h2>Inicio de sesión</h2>
+            <h2>Iniciar sesión</h2>
           </div>
           <form id="loginForm" class="login-form">
-            <input id="email" type="email" placeholder="Email" autocomplete="username" />
-            <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+            <label class="visually-hidden" for="email">Correo electrónico</label>
+            <input id="email" type="email" placeholder="Correo corporativo" autocomplete="username" />
+            <label class="visually-hidden" for="password">Contraseña</label>
+            <input id="password" type="password" placeholder="Contraseña" autocomplete="current-password" />
             <div class="operator-actions">
-              <button type="submit">Iniciar sesión</button>
+              <button type="submit">Entrar</button>
             </div>
           </form>
           <p id="authMessage" class="helper" data-state="info" role="status" aria-live="polite">
-            Introduce tu correo y contraseña para confirmar alertas desde el dashboard.
+            Introduzca sus credenciales para gestionar alertas desde el monitor.
           </p>
           <div class="helper-links">
-            <a href="../dashboard/" class="button secondary">Ver dashboard público</a>
-            <a href="../register/" class="button secondary">Crear cuenta</a>
+            <a href="../dashboard/" class="button secondary">Volver al monitor público</a>
+            <a href="../register/" class="button secondary">Alta de operador</a>
           </div>
         </article>
       </section>

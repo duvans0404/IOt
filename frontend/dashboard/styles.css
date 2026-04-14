@@ -30,7 +30,7 @@
 
 .simulation-detail {
   padding: 16px;
-  border-radius: 18px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
@@ -55,7 +55,7 @@
 
 .payload-card {
   padding: 18px;
-  border-radius: 18px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
@@ -77,8 +77,6 @@
 
 .panel-head.compact h3 {
   margin: 0;
-  font-family: var(--display);
-  font-size: 1rem;
 }
 
 .payload-view {

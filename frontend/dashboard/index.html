@@ -2,8 +2,10 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard IoT Water Monitor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#060b0d" />
+    <meta name="description" content="Monitor en tiempo real de flujo, presión y alertas de fugas. Sistema IoT con ESP32." />
+    <title>AquaSense · Monitor de red hídrica</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
     <script src="../config.js" defer></script>
     <script src="../common.js" defer></script>
@@ -11,30 +13,44 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body data-page="dashboard">
-    <div class="backdrop"></div>
-    <main class="shell">
+    <div class="backdrop" aria-hidden="true"></div>
+    <main class="shell shell--with-header">
+      <header class="site-header">
+        <a class="brand" href="./">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-text">
+            <span class="brand-name">AquaSense</span>
+            <span class="brand-tagline">Monitoreo de fugas · ESP32 &amp; nube</span>
+          </span>
+        </a>
+        <nav class="site-nav" aria-label="Navegación principal">
+          <a href="./" aria-current="page">Monitor en vivo</a>
+          <a href="../login/">Acceso operadores</a>
+        </nav>
+      </header>
+
       <section class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">Wokwi + ESP32 + Railway</p>
-          <h1>Dashboard público de monitoreo de fugas.</h1>
+          <p class="eyebrow">Telemetría continua</p>
+          <h1>Supervisión profesional de presión y flujo ante fugas.</h1>
           <p class="subcopy">
-            Visualiza el estado del circuito y los datos históricos en una página independiente de login.
+            Panel de lectura pública con histórico, alertas y estado del circuito físico. Los operadores confirman incidencias desde un acceso restringido.
           </p>
           <div class="hero-actions">
-            <a href="../login/" class="button secondary">Iniciar sesión</a>
-            <a href="#dashboard" class="button">Ver tablero</a>
+            <a href="../login/" class="button secondary">Acceso operadores</a>
+            <a href="#dashboard" class="button">Ir a métricas</a>
           </div>
         </div>
         <div class="hero-status">
           <div class="status-card">
-            <span class="status-label">Conexión dispositivo</span>
+            <span class="status-label">Dispositivo</span>
             <strong id="deviceStatus">Sin datos</strong>
             <span id="lastSeen">Esperando lectura</span>
           </div>
           <div class="status-card">
-            <span class="status-label">Estado actual</span>
+            <span class="status-label">Estado del sistema</span>
             <strong id="stateHeadline">SIN_DATOS</strong>
-            <span id="stateSummary">El panel público se actualizará cada 2 segundos.</span>
+            <span id="stateSummary">Actualización automática cada 2 s y canal en tiempo real.</span>
           </div>
         </div>
       </section>
@@ -42,12 +58,12 @@
       <section class="dashboard-grid" id="dashboard">
         <article class="panel metric-panel">
           <div class="panel-head">
-            <h2>Lectura actual</h2>
+            <h2>Métricas instantáneas</h2>
             <span class="pill" id="statePill">SIN_DATOS</span>
           </div>
           <div class="metrics">
             <div class="metric">
-              <span>Flujo</span>
+              <span>Caudal</span>
               <strong id="metricFlow">--</strong>
               <small>L/min</small>
             </div>
@@ -57,29 +73,29 @@
               <small>kPa</small>
             </div>
             <div class="metric">
-              <span>Riesgo</span>
+              <span>Índice de riesgo</span>
               <strong id="metricRisk">--</strong>
               <small>%</small>
             </div>
             <div class="metric">
-              <span>Dispositivo</span>
+              <span>Origen</span>
               <strong id="metricDevice">--</strong>
-              <small>Origen de datos</small>
+              <small>Dispositivo</small>
             </div>
           </div>
         </article>
 
         <article class="panel operator-panel">
           <div class="panel-head">
-            <h2>Operador</h2>
+            <h2>Consola de operador</h2>
             <span class="operator-badge" id="operatorBadge">Lectura pública</span>
           </div>
           <div class="panel-body">
             <p id="authMessage" class="helper">
-              Accede desde la página de inicio de sesión para confirmar alertas.
+              Inicie sesión para reconocer y cerrar alertas desde este entorno.
             </p>
             <div class="operator-actions dashboard-actions">
-              <a href="../login/" class="button secondary">Ir a iniciar sesión</a>
+              <a href="../login/" class="button secondary">Ir al acceso</a>
               <button type="button" id="logoutBtn" class="ghost">Cerrar sesión</button>
             </div>
           </div>
@@ -87,24 +103,24 @@
 
         <article class="panel simulation-panel">
           <div class="panel-head">
-            <h2>Simulación actual</h2>
+            <h2>Resumen de telemetría</h2>
             <span class="mono" id="simulationConnection">Sin datos</span>
           </div>
           <div class="simulation-details">
             <div class="simulation-detail">
-              <span>Estado</span>
+              <span>Estado lógico</span>
               <strong id="simulationState">SIN_DATOS</strong>
             </div>
             <div class="simulation-detail">
-              <span>Última actualización</span>
+              <span>Última muestra</span>
               <strong id="simulationUpdatedAt">--</strong>
             </div>
             <div class="simulation-detail">
-              <span>Lecturas cargadas</span>
+              <span>Lecturas</span>
               <strong id="simulationSamples">0</strong>
             </div>
             <div class="simulation-detail">
-              <span>Alertas cargadas</span>
+              <span>Alertas</span>
               <strong id="simulationAlerts">0</strong>
             </div>
             <div class="simulation-detail simulation-detail-wide">
@@ -114,8 +130,8 @@
           </div>
           <div class="payload-card">
             <div class="panel-head compact">
-              <h3>Último payload recibido</h3>
-              <span class="mono">API pública</span>
+              <h3>Último payload (API)</h3>
+              <span class="mono">JSON</span>
             </div>
             <pre id="simulationPayload" class="payload-view">Sin payload disponible.</pre>
           </div>
@@ -123,52 +139,52 @@
 
         <article class="panel chart-panel">
           <div class="panel-head">
-            <h2>Flujo histórico</h2>
-            <span class="mono">60 muestras</span>
+            <h2>Tendencia de caudal</h2>
+            <span class="mono">60 puntos</span>
           </div>
-          <canvas id="flowChart"></canvas>
+          <canvas id="flowChart" aria-label="Gráfico histórico de caudal"></canvas>
         </article>
 
         <article class="panel chart-panel">
           <div class="panel-head">
-            <h2>Presión histórica</h2>
-            <span class="mono">Actualización cada 2 s</span>
+            <h2>Tendencia de presión</h2>
+            <span class="mono">Δ 2 s</span>
           </div>
-          <canvas id="pressureChart"></canvas>
+          <canvas id="pressureChart" aria-label="Gráfico histórico de presión"></canvas>
         </article>
 
         <article class="panel circuit-panel">
           <div class="panel-head">
-            <h2>Estado físico del circuito</h2>
+            <h2>Indicadores en campo</h2>
             <span class="mono">ESP32 · Wokwi</span>
           </div>
           <div class="circuit-grid">
             <div class="circuit-item">
               <span class="led led-green" id="ledGreen"></span>
               <div>
-                <strong>LED verde</strong>
-                <small>NORMAL fijo</small>
+                <strong>Normal</strong>
+                <small>LED verde · operación nominal</small>
               </div>
             </div>
             <div class="circuit-item">
               <span class="led led-amber" id="ledAmber"></span>
               <div>
-                <strong>LED naranja</strong>
-                <small>ALERTA intermitente</small>
+                <strong>Alerta</strong>
+                <small>LED ámbar · intermitente</small>
               </div>
             </div>
             <div class="circuit-item">
               <span class="led led-red" id="ledRed"></span>
               <div>
-                <strong>LED rojo</strong>
-                <small>FUGA o ERROR</small>
+                <strong>Crítico</strong>
+                <small>LED rojo · fuga o fallo</small>
               </div>
             </div>
             <div class="circuit-item buzzer" id="buzzerState">
-              <span class="buzzer-icon">)))</span>
+              <span class="buzzer-icon" aria-hidden="true">⌁</span>
               <div>
-                <strong>Buzzer</strong>
-                <small id="buzzerText">Apagado</small>
+                <strong>Alarma sonora</strong>
+                <small id="buzzerText">Inactiva</small>
               </div>
             </div>
           </div>
@@ -176,16 +192,16 @@
 
         <article class="panel alerts-panel">
           <div class="panel-head">
-            <h2>Alertas recientes</h2>
-            <span class="mono">máx. 20</span>
+            <h2>Registro de alertas</h2>
+            <span class="mono">hasta 20</span>
           </div>
           <ul id="alertsList" class="alerts-list"></ul>
         </article>
 
         <article class="panel table-panel">
           <div class="panel-head">
-            <h2>Lecturas recientes</h2>
-            <span class="mono">Últimas 60</span>
+            <h2>Historial de lecturas</h2>
+            <span class="mono">últimas 60</span>
           </div>
           <div class="table-wrap">
             <table>
@@ -193,7 +209,7 @@
                 <tr>
                   <th>Hora</th>
                   <th>Dispositivo</th>
-                  <th>Flujo</th>
+                  <th>Caudal</th>
                   <th>Presión</th>
                   <th>Riesgo</th>
                   <th>Estado</th>
