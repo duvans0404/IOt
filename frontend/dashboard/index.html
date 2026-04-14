@@ -85,6 +85,42 @@
           </div>
         </article>
 
+        <article class="panel simulation-panel">
+          <div class="panel-head">
+            <h2>Simulación actual</h2>
+            <span class="mono" id="simulationConnection">Sin datos</span>
+          </div>
+          <div class="simulation-details">
+            <div class="simulation-detail">
+              <span>Estado</span>
+              <strong id="simulationState">SIN_DATOS</strong>
+            </div>
+            <div class="simulation-detail">
+              <span>Última actualización</span>
+              <strong id="simulationUpdatedAt">--</strong>
+            </div>
+            <div class="simulation-detail">
+              <span>Lecturas cargadas</span>
+              <strong id="simulationSamples">0</strong>
+            </div>
+            <div class="simulation-detail">
+              <span>Alertas cargadas</span>
+              <strong id="simulationAlerts">0</strong>
+            </div>
+            <div class="simulation-detail simulation-detail-wide">
+              <span>Última alerta</span>
+              <strong id="simulationLastAlert">Sin alertas</strong>
+            </div>
+          </div>
+          <div class="payload-card">
+            <div class="panel-head compact">
+              <h3>Último payload recibido</h3>
+              <span class="mono">API pública</span>
+            </div>
+            <pre id="simulationPayload" class="payload-view">Sin payload disponible.</pre>
+          </div>
+        </article>
+
         <article class="panel chart-panel">
           <div class="panel-head">
             <h2>Flujo histórico</h2>

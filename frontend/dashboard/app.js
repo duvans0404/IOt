@@ -29,6 +29,13 @@ const dashboardEls = {
   metricPressure: document.getElementById("metricPressure"),
   metricRisk: document.getElementById("metricRisk"),
   metricDevice: document.getElementById("metricDevice"),
+  simulationState: document.getElementById("simulationState"),
+  simulationUpdatedAt: document.getElementById("simulationUpdatedAt"),
+  simulationSamples: document.getElementById("simulationSamples"),
+  simulationAlerts: document.getElementById("simulationAlerts"),
+  simulationConnection: document.getElementById("simulationConnection"),
+  simulationLastAlert: document.getElementById("simulationLastAlert"),
+  simulationPayload: document.getElementById("simulationPayload"),
   operatorBadge: document.getElementById("operatorBadge"),
   authMessage: document.getElementById("authMessage"),
   alertsList: document.getElementById("alertsList"),
@@ -54,6 +61,49 @@ const syncCircuit = (state) => {
   if (dashboardEls.ledRed) dashboardEls.ledRed.dataset.active = state === "FUGA" || state === "ERROR";
   if (dashboardEls.buzzerState) dashboardEls.buzzerState.dataset.active = state === "FUGA";
   if (dashboardEls.buzzerText) dashboardEls.buzzerText.textContent = state === "FUGA" ? "Activo por fuga confirmada" : "Apagado";
+};
+
+const renderSimulationState = (payload) => {
+  const { latestReading, currentState, lastSeenAt, deviceOnline, recentReadings, recentAlerts } = payload;
+  const latestAlert = recentAlerts[0] || null;
+
+  if (dashboardEls.simulationConnection) {
+    dashboardEls.simulationConnection.textContent = deviceOnline ? "Telemetría activa" : "Sin telemetría reciente";
+  }
+  if (dashboardEls.simulationState) {
+    dashboardEls.simulationState.textContent = currentState || "SIN_DATOS";
+    dashboardEls.simulationState.dataset.tone = stateToneMap[currentState] || "muted";
+  }
+  if (dashboardEls.simulationUpdatedAt) {
+    dashboardEls.simulationUpdatedAt.textContent = lastSeenAt ? formatTs(lastSeenAt) : "--";
+  }
+  if (dashboardEls.simulationSamples) {
+    dashboardEls.simulationSamples.textContent = String((recentReadings || []).length);
+  }
+  if (dashboardEls.simulationAlerts) {
+    dashboardEls.simulationAlerts.textContent = String((recentAlerts || []).length);
+  }
+  if (dashboardEls.simulationLastAlert) {
+    dashboardEls.simulationLastAlert.textContent = latestAlert
+      ? `${latestAlert.severity} · ${formatTs(latestAlert.ts)}`
+      : "Sin alertas";
+  }
+  if (dashboardEls.simulationPayload) {
+    dashboardEls.simulationPayload.textContent = latestReading
+      ? JSON.stringify(
+          {
+            deviceName: latestReading.deviceName,
+            ts: latestReading.ts,
+            flow_lmin: latestReading.flow_lmin,
+            pressure_kpa: latestReading.pressure_kpa,
+            risk: latestReading.risk,
+            state: latestReading.state
+          },
+          null,
+          2
+        )
+      : "Sin payload disponible.";
+  }
 };
 
 const updateAuthUI = () => {
@@ -180,7 +230,6 @@ const renderReadings = (recentReadings) => {
   recentReadings
     .slice()
     .reverse()
-    .slice(0, 12)
     .forEach((reading) => {
       const row = document.createElement("tr");
       row.innerHTML = `
@@ -199,12 +248,21 @@ const loadDashboard = async () => {
   try {
     const payload = await api("/api/public/dashboard");
     renderLatestReading(payload.latestReading, payload.deviceOnline, payload.lastSeenAt, payload.currentState);
+    renderSimulationState(payload);
     renderCharts(payload.recentReadings || []);
     renderAlerts(payload.recentAlerts || []);
     renderReadings(payload.recentReadings || []);
   } catch (error) {
     if (dashboardEls.authMessage) dashboardEls.authMessage.textContent = error.message;
     renderLatestReading(null, false, null, "SIN_DATOS");
+    renderSimulationState({
+      latestReading: null,
+      currentState: "SIN_DATOS",
+      lastSeenAt: null,
+      deviceOnline: false,
+      recentReadings: [],
+      recentAlerts: []
+    });
     renderAlerts([]);
     renderReadings([]);
   }
