@@ -33,8 +33,8 @@ entries.forEach((entry) => {
 
 const configPath = path.join(distDir, "config.js");
 const renderedConfig = readFileSync(configPath, "utf8").replace(
-  /__API_BASE_URL__/g,
-  apiBaseUrl.replace(/\$/g, "$$$$")
+  /const injectedApiBaseUrl = "__API_BASE_URL__";/,
+  `const injectedApiBaseUrl = "${apiBaseUrl.replace(/\$/g, "$$$$")}";`
 );
 
 writeFileSync(configPath, renderedConfig, "utf8");

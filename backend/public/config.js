@@ -4,9 +4,7 @@ const isLocalhost = window.location.hostname === "localhost" || window.location.
 const isFileProtocol = window.location.protocol === "file:" || !window.location.hostname;
 const injectedApiBaseUrl = "__API_BASE_URL__";
 const hasInjectedApiBaseUrl =
-  injectedApiBaseUrl &&
-  injectedApiBaseUrl !== "__API_BASE_URL__" &&
-  !injectedApiBaseUrl.includes("__API_BASE_URL__");
+  injectedApiBaseUrl.startsWith("https://") || injectedApiBaseUrl.startsWith("http://");
 
 window.API_BASE_URL =
   window.API_BASE_URL ||
