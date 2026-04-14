@@ -269,6 +269,23 @@ body {
   gap: clamp(14px, 2.5vw, 18px);
 }
 
+@media (min-width: 1101px) {
+  .circuit-panel {
+    grid-column: 1 / span 6;
+    grid-row: 4;
+  }
+
+  .alerts-panel {
+    grid-column: 7 / span 6;
+    grid-row: 4 / span 2;
+  }
+
+  .table-panel {
+    grid-column: 1 / span 6;
+    grid-row: 5;
+  }
+}
+
 .hero > *,
 .dashboard-grid > *,
 .metrics > *,
