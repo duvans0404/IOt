@@ -173,6 +173,24 @@ body {
   color: var(--muted);
 }
 
+.helper {
+  min-height: 2.8em;
+  white-space: pre-line;
+  transition: color 160ms ease;
+}
+
+.helper[data-state="info"] {
+  color: var(--muted);
+}
+
+.helper[data-state="success"] {
+  color: var(--normal);
+}
+
+.helper[data-state="error"] {
+  color: var(--danger);
+}
+
 .metric strong {
   display: block;
   margin: 10px 0 6px;
@@ -242,6 +260,12 @@ body {
   background: rgba(255, 255, 255, 0.03);
   color: var(--ink);
   font: inherit;
+}
+
+.login-form input[data-error="true"],
+.login-form input[aria-invalid="true"] {
+  border-color: rgba(255, 107, 107, 0.65);
+  box-shadow: 0 0 0 1px rgba(255, 107, 107, 0.2);
 }
 
 .operator-actions {

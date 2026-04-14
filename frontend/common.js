@@ -1,5 +1,43 @@
 const API_BASE_URL = (window.API_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
 const COLOMBIA_TIMEZONE = "America/Bogota";
+const FIELD_LABELS = {
+  nombre: "Nombre",
+  email: "Correo electrónico",
+  password: "Contraseña"
+};
+
+const parseJsonSafely = async (response) => {
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    return {};
+  }
+
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+};
+
+const normalizeErrors = (errors) =>
+  Array.isArray(errors)
+    ? errors.map((item) => ({
+        field: item.field || item.param || "",
+        msg: item.msg || "Dato inválido"
+      }))
+    : [];
+
+const buildErrorMessage = (data, details) => {
+  if (details.length) {
+    const detailLines = details.map((item) => `${FIELD_LABELS[item.field] || item.field}: ${item.msg}`);
+    if (data.msg && data.msg !== "Error API") {
+      return `${data.msg}\n${detailLines.join("\n")}`;
+    }
+    return detailLines.join("\n");
+  }
+
+  return data.msg || "Error API";
+};
 
 const api = async (url, options = {}) => {
   const headers = { ...(options.headers || {}) };
@@ -9,14 +47,23 @@ const api = async (url, options = {}) => {
   }
 
   const finalUrl = API_BASE_URL ? `${API_BASE_URL}${url}` : url;
-  const response = await fetch(finalUrl, { ...options, headers });
-  const data = await response.json();
+  let response;
+  try {
+    response = await fetch(finalUrl, { ...options, headers });
+  } catch {
+    const error = new Error("No fue posible conectar con el servidor. Intenta de nuevo en unos segundos.");
+    error.status = 0;
+    error.details = [];
+    throw error;
+  }
+
+  const data = await parseJsonSafely(response);
 
   if (!response.ok) {
-    const message =
-      data.msg || data.errors?.map((item) => `${item.field}: ${item.msg}`).join(" | ") || "Error API";
-    const error = new Error(message);
+    const details = normalizeErrors(data.errors);
+    const error = new Error(buildErrorMessage(data, details));
     error.status = response.status;
+    error.details = details;
     throw error;
   }
 

@@ -5,6 +5,36 @@ const loginEls = {
   authMessage: document.getElementById("authMessage")
 };
 
+const loginFieldMap = {
+  email: loginEls.email,
+  password: loginEls.password
+};
+
+const setLoginMessage = (message, state = "info") => {
+  if (!loginEls.authMessage) return;
+  loginEls.authMessage.textContent = message;
+  loginEls.authMessage.dataset.state = state;
+};
+
+const clearLoginFieldState = () => {
+  Object.values(loginFieldMap).forEach((field) => {
+    if (!field) return;
+    field.removeAttribute("aria-invalid");
+    field.removeAttribute("data-error");
+    field.removeAttribute("title");
+  });
+};
+
+const applyLoginFieldErrors = (details = []) => {
+  details.forEach(({ field, msg }) => {
+    const input = loginFieldMap[field];
+    if (!input) return;
+    input.setAttribute("aria-invalid", "true");
+    input.dataset.error = "true";
+    input.title = msg;
+  });
+};
+
 const initLoginPage = () => {
   const token = localStorage.getItem("token") || "";
   if (token) {
@@ -14,8 +44,23 @@ const initLoginPage = () => {
 
   if (!loginEls.loginForm) return;
 
+  Object.values(loginFieldMap).forEach((field) => {
+    if (!field) return;
+    field.addEventListener("input", () => {
+      field.removeAttribute("aria-invalid");
+      field.removeAttribute("data-error");
+      field.removeAttribute("title");
+      if (loginEls.authMessage?.dataset.state === "error") {
+        setLoginMessage("Introduce tu correo y contraseña para confirmar alertas desde el dashboard.", "info");
+      }
+    });
+  });
+
   loginEls.loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+    clearLoginFieldState();
+    setLoginMessage("Verificando credenciales...", "info");
+
     try {
       const response = await api("/api/auth/login", {
         method: "POST",
@@ -27,13 +72,14 @@ const initLoginPage = () => {
       });
 
       localStorage.setItem("token", response.token);
-      if (loginEls.authMessage) loginEls.authMessage.textContent = "Sesión iniciada. Redirigiendo al dashboard...";
+      setLoginMessage("Sesión iniciada. Redirigiendo al dashboard...", "success");
       loginEls.password.value = "";
       setTimeout(() => {
         window.location.href = "../dashboard/";
       }, 400);
     } catch (error) {
-      if (loginEls.authMessage) loginEls.authMessage.textContent = error.message;
+      applyLoginFieldErrors(error.details || []);
+      setLoginMessage(error.message, "error");
     }
   });
 };
