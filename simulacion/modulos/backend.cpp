@@ -1,4 +1,5 @@
 #include <WiFiClient.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include "modulos/config.h"
 #include "modulos/backend.h"
@@ -16,6 +17,10 @@ String backendModeTexto() {
   return BACKEND_MODE == BACKEND_PUBLIC ? "PUBLIC" : "LOCAL";
 }
 
+static bool backendUsaHttps(const String &url) {
+  return url.startsWith("https://");
+}
+
 void enviarBackend(SystemState &state) {
   if (!asegurarWiFi()) {
     state.backendOnline = false;
@@ -26,6 +31,7 @@ void enviarBackend(SystemState &state) {
   }
 
   WiFiClient client;
+  WiFiClientSecure secureClient;
   HTTPClient http;
   http.setTimeout(5000);
 
@@ -39,14 +45,24 @@ void enviarBackend(SystemState &state) {
   payload += "}";
 
   Serial.println(">>> Enviando lectura al backend...");
+  Serial.print("Transporte: ");
+  Serial.println(backendUsaHttps(url) ? "HTTPS (Railway)" : "HTTP");
   Serial.println(url);
   Serial.println(payload);
 
-  if (!http.begin(client, url)) {
+  bool httpIniciado = false;
+  if (backendUsaHttps(url)) {
+    secureClient.setInsecure();
+    httpIniciado = http.begin(secureClient, url);
+  } else {
+    httpIniciado = http.begin(client, url);
+  }
+
+  if (!httpIniciado) {
     state.backendOnline = false;
     state.backendLastCode = -1;
-    state.backendLastMsg = "No se pudo iniciar HTTP";
-    Serial.println("No se pudo iniciar HTTP");
+    state.backendLastMsg = "No se pudo iniciar HTTP/HTTPS";
+    Serial.println("No se pudo iniciar HTTP/HTTPS");
     return;
   }
 

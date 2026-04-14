@@ -1,4 +1,5 @@
 const { Device, Reading, Alert } = require("../models");
+const { broadcastDashboardUpdate } = require("../services/dashboardStream");
 
 const FUTURE_TOLERANCE_MS = 5_000;
 
@@ -68,6 +69,10 @@ const createReading = async (req, res, next) => {
         acknowledged: false
       });
     }
+
+    broadcastDashboardUpdate().catch((error) => {
+      console.error("No se pudo emitir la actualizacion del dashboard:", error);
+    });
 
     return res.status(201).json({ ok: true, reading });
   } catch (error) {

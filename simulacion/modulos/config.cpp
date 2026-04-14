@@ -13,7 +13,9 @@ const char* DEVICE_NAME = "ESP32-WOKWI-01";
 // Esta clave debe ser EXACTAMENTE la misma que la variable INGEST_API_KEY del
 // servicio backend en Railway. Si no coincide, el backend responde 401.
 const char* INGEST_API_KEY = "wokwi-dev-ingest-key";
-const unsigned long BACKEND_SEND_INTERVAL_MS = 15000;
+// Enviamos con la misma cadencia de medicion para que el dashboard refleje
+// los cambios casi al instante sin esperar 15 segundos entre publicaciones.
+const unsigned long BACKEND_SEND_INTERVAL_MS = 2000;
 
 const int flowPin    = 27;
 const int ledVerde   = 2;

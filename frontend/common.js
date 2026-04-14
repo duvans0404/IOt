@@ -49,7 +49,7 @@ const api = async (url, options = {}) => {
   const finalUrl = API_BASE_URL ? `${API_BASE_URL}${url}` : url;
   let response;
   try {
-    response = await fetch(finalUrl, { ...options, headers });
+    response = await fetch(finalUrl, { cache: "no-store", ...options, headers });
   } catch {
     const error = new Error("No fue posible conectar con el servidor. Intenta de nuevo en unos segundos.");
     error.status = 0;

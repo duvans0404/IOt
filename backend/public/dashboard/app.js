@@ -1,4 +1,5 @@
 let dashboardTimer = null;
+let dashboardStream = null;
 let flowChart;
 let pressureChart;
 let token = localStorage.getItem("token") || "";
@@ -244,14 +245,61 @@ const renderReadings = (recentReadings) => {
     });
 };
 
+const applyDashboardPayload = (payload) => {
+  renderLatestReading(payload.latestReading, payload.deviceOnline, payload.lastSeenAt, payload.currentState);
+  renderSimulationState(payload);
+  renderCharts(payload.recentReadings || []);
+  renderAlerts(payload.recentAlerts || []);
+  renderReadings(payload.recentReadings || []);
+};
+
+const clearDashboardPolling = () => {
+  if (!dashboardTimer) return;
+  clearInterval(dashboardTimer);
+  dashboardTimer = null;
+};
+
+const ensureDashboardPolling = (intervalMs = 2000) => {
+  if (dashboardTimer) return;
+  dashboardTimer = setInterval(loadDashboard, intervalMs);
+};
+
+const closeDashboardStream = () => {
+  if (!dashboardStream) return;
+  dashboardStream.close();
+  dashboardStream = null;
+};
+
+const handleDashboardStreamPayload = (event) => {
+  try {
+    const payload = JSON.parse(event.data);
+    applyDashboardPayload(payload);
+  } catch (error) {
+    console.error("No se pudo leer la actualizacion en vivo del dashboard.", error);
+  }
+};
+
+const startDashboardStream = () => {
+  if (typeof window.EventSource !== "function") {
+    ensureDashboardPolling(2000);
+    return;
+  }
+
+  closeDashboardStream();
+  dashboardStream = new EventSource(`${API_BASE_URL}/api/public/dashboard/stream`);
+  dashboardStream.addEventListener("open", () => {
+    clearDashboardPolling();
+  });
+  dashboardStream.addEventListener("dashboard", handleDashboardStreamPayload);
+  dashboardStream.addEventListener("error", () => {
+    ensureDashboardPolling(2000);
+  });
+};
+
 const loadDashboard = async () => {
   try {
     const payload = await api("/api/public/dashboard");
-    renderLatestReading(payload.latestReading, payload.deviceOnline, payload.lastSeenAt, payload.currentState);
-    renderSimulationState(payload);
-    renderCharts(payload.recentReadings || []);
-    renderAlerts(payload.recentAlerts || []);
-    renderReadings(payload.recentReadings || []);
+    applyDashboardPayload(payload);
   } catch (error) {
     if (dashboardEls.authMessage) dashboardEls.authMessage.textContent = error.message;
     renderLatestReading(null, false, null, "SIN_DATOS");
@@ -324,7 +372,8 @@ const initDashboardPage = async () => {
   }
 
   await loadDashboard();
-  dashboardTimer = setInterval(loadDashboard, 2000);
+  ensureDashboardPolling(2000);
+  startDashboardStream();
 };
 
 window.addEventListener("load", async () => {
@@ -332,4 +381,9 @@ window.addEventListener("load", async () => {
   if (page === "dashboard") {
     await initDashboardPage();
   }
+});
+
+window.addEventListener("beforeunload", () => {
+  clearDashboardPolling();
+  closeDashboardStream();
 });

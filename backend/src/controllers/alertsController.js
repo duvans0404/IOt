@@ -1,4 +1,5 @@
 const { Alert } = require("../models");
+const { broadcastDashboardUpdate } = require("../services/dashboardStream");
 
 const listAlerts = async (req, res, next) => {
   try {
@@ -22,6 +23,11 @@ const ackAlert = async (req, res, next) => {
     alert.acknowledged = true;
     alert.ack_at = new Date();
     await alert.save();
+
+    broadcastDashboardUpdate().catch((error) => {
+      console.error("No se pudo emitir la actualizacion del dashboard:", error);
+    });
+
     return res.json({ ok: true, alert });
   } catch (error) {
     return next(error);

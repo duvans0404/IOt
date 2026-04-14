@@ -2,3 +2,4 @@
 version = 1
 firmware = "build/simulacion.ino.bin"
 elf = "build/simulacion.ino.elf"
+rfc2217ServerPort = 4000
