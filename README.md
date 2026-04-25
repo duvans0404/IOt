@@ -203,6 +203,95 @@ Para que ambos escenarios funcionen correctamente:
 
 El repositorio deja `BACKEND_LOCAL` como valor predeterminado para facilitar las pruebas locales. Cuando vuelvas a Railway, usa `BACKEND_PUBLIC` y la URL real del servicio.
 
+## Modelo de datos extendido
+
+El esquema de la base de datos cubre el ciclo completo de deteccion, almacenamiento historico, confirmacion de alertas y control remoto. Esta organizado en 18 tablas que se crean automaticamente con las migraciones en `backend/src/db/migrations/`.
+
+### Tablas principales
+
+| Tabla                      | Responsabilidad                                                                                   |
+|----------------------------|---------------------------------------------------------------------------------------------------|
+| `houses` (vivienda)        | Vivienda/unidad fisica monitoreada.                                                               |
+| `ubicacion_instalacion`    | Puntos fisicos dentro de la vivienda (cocina, patio, etc.) para ubicar sensores.                  |
+| `devices` (dispositivo_iot)| Nodo ESP32 con credenciales propias, firmware y ubicacion logica.                                 |
+| `sensores`                 | Sensores individuales que cuelgan de un device (caudal, presion, valvula, temperatura).           |
+| `readings` (lectura_caudal)| Telemetria cruda por lectura, vinculable a `sensor_id`.                                           |
+| `estado_sistema`           | Historico de estados por device (`NORMAL`, `ALERTA`, `FUGA`, `MANTENIMIENTO`, `OFFLINE`).         |
+| `incidente_fuga`           | Agregacion de eventos de fuga con duracion, volumen estimado y resolucion.                        |
+| `alerts` (alerta)          | Alertas operativas; ahora con `incidente_id`, `ack_by_user_id`, `ack_note` y `tipo`.              |
+| `electrovalvulas`          | Estado actual de la electrovalvula asociada a cada device (1:1 logica).                           |
+| `acciones_valvula`         | Bitacora de aperturas/cierres/resets con origen (`MANUAL`, `AUTO_FUGA`, `PROGRAMADO`, `REMOTO`).  |
+| `configuracion_deteccion`  | Umbrales por device: 2 L/min durante 30 min (configurable), presion, auto-cierre, notificaciones. |
+| `comandos_remotos`         | Comandos enviados al device (`CERRAR_VALVULA`, `ABRIR_VALVULA`, `ACTUALIZAR_CONFIG`, etc.).       |
+| `respuestas_comando`       | Respuesta 1:1 del device al comando remoto.                                                       |
+| `users` (usuario)          | Cuentas de acceso al panel.                                                                       |
+| `roles` (rol)              | Catalogo de roles (`admin`, `operator`, `resident`, `tecnico`).                                   |
+| `user_roles`               | Relacion muchos-a-muchos usuario <-> rol.                                                         |
+| `auditoria_sistema`        | Trazabilidad de acciones (usuario, entidad, accion, IP, user-agent, payload).                     |
+
+### Diagrama ER (resumen)
+
+```mermaid
+erDiagram
+    HOUSES ||--o{ DEVICES : contiene
+    HOUSES ||--o{ UBICACION_INSTALACION : define
+    HOUSES ||--o{ USERS : residen
+    DEVICES ||--o{ SENSORES : integra
+    DEVICES ||--|| ELECTROVALVULAS : controla
+    DEVICES ||--|| CONFIGURACION_DETECCION : tiene
+    DEVICES ||--o{ READINGS : reporta
+    DEVICES ||--o{ ESTADO_SISTEMA : registra
+    DEVICES ||--o{ INCIDENTE_FUGA : genera
+    DEVICES ||--o{ ALERTS : emite
+    DEVICES ||--o{ COMANDOS_REMOTOS : recibe
+    UBICACION_INSTALACION ||--o{ SENSORES : ubica
+    SENSORES ||--o{ READINGS : origina
+    INCIDENTE_FUGA ||--o{ ALERTS : agrupa
+    ELECTROVALVULAS ||--o{ ACCIONES_VALVULA : bitacora
+    COMANDOS_REMOTOS ||--|| RESPUESTAS_COMANDO : responde
+    USERS ||--o{ USER_ROLES : asigna
+    ROLES ||--o{ USER_ROLES : agrupa
+    USERS ||--o{ AUDITORIA_SISTEMA : audita
+    USERS ||--o{ ACCIONES_VALVULA : ejecuta
+    USERS ||--o{ COMANDOS_REMOTOS : envia
+```
+
+### Deteccion de fuga configurable
+
+La tabla `configuracion_deteccion` permite ajustar por device:
+
+- `umbral_flow_lmin` (default `2.0`) — caudal minimo continuo que dispara la deteccion.
+- `ventana_minutos` (default `30`) — ventana temporal durante la que se evalua el umbral.
+- `umbral_presion_min_kpa` / `umbral_presion_max_kpa` — rango valido de presion.
+- `auto_cierre_valvula` — si se debe emitir automaticamente un `comando_remoto` de cierre ante fuga confirmada.
+- `notificar_email` — si se debe generar notificacion.
+
+Cuando un device supera el umbral durante toda la ventana, el backend debera:
+
+1. Abrir un registro en `incidente_fuga` con `estado = ABIERTO`.
+2. Crear la alerta asociada con `tipo = FUGA` y `incidente_id`.
+3. Si `auto_cierre_valvula = true`, encolar un `comando_remoto` tipo `CERRAR_VALVULA`.
+4. Escribir el cambio de estado en `estado_sistema`.
+5. Registrar la accion en `auditoria_sistema`.
+
+### Control remoto de la valvula
+
+- `POST` al backend genera un registro en `comandos_remotos` con `estado = PENDIENTE`.
+- El ESP32 consulta/recibe el comando, actua y responde → `respuestas_comando` con `codigo_resultado`.
+- El estado actual de la valvula se persiste en `electrovalvulas` y cada accion queda en `acciones_valvula`.
+- Los modos soportados son `AUTO`, `MANUAL` y `BLOQUEADA`.
+
+### Confirmacion de alertas con trazabilidad
+
+`PATCH /api/alerts/:id/ack` debera poblar ademas:
+
+- `acknowledged = true`
+- `ack_at = NOW()`
+- `ack_by_user_id = <usuario autenticado>`
+- `ack_note = <mensaje opcional>`
+
+Todas las tablas criticas cuentan con indices compuestos (`device_id + ts`, `device_id + estado`, `device_id + detected_at`) para soportar consultas de dashboard e historicos de forma eficiente.
+
 ## Notas de operacion
 
 - El frontend Angular es publico en lectura.

@@ -10,7 +10,8 @@ module.exports = (sequelize) => {
       flow_lmin: { type: DataTypes.FLOAT, allowNull: false },
       pressure_kpa: { type: DataTypes.FLOAT, allowNull: false },
       risk: { type: DataTypes.INTEGER, allowNull: false },
-      state: { type: DataTypes.STRING(16), allowNull: false }
+      state: { type: DataTypes.STRING(16), allowNull: false },
+      sensor_id: { type: DataTypes.INTEGER, allowNull: true }
     },
     {
       tableName: "readings",

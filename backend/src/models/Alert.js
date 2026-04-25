@@ -10,7 +10,11 @@ module.exports = (sequelize) => {
       severity: { type: DataTypes.STRING(16), allowNull: false },
       message: { type: DataTypes.STRING(255), allowNull: false },
       acknowledged: { type: DataTypes.BOOLEAN, defaultValue: false },
-      ack_at: { type: DataTypes.DATE, allowNull: true }
+      ack_at: { type: DataTypes.DATE, allowNull: true },
+      incidente_id: { type: DataTypes.BIGINT, allowNull: true },
+      ack_by_user_id: { type: DataTypes.INTEGER, allowNull: true },
+      ack_note: { type: DataTypes.STRING(500), allowNull: true },
+      tipo: { type: DataTypes.STRING(40), allowNull: false, defaultValue: "FUGA" }
     },
     {
       tableName: "alerts",
