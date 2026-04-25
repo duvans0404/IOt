@@ -11,9 +11,10 @@ const publicRoutes = require("./routes/public");
 const errorHandler = require("./middlewares/errorHandler");
 const requestMeta = require("./middlewares/requestMeta");
 const requestLogger = require("./middlewares/requestLogger");
+const { getTrustProxySetting } = require("./config/env");
 
 const app = express();
-app.set("trust proxy", true);
+app.set("trust proxy", getTrustProxySetting());
 const isProduction = process.env.NODE_ENV === "production";
 const defaultDevOrigins = ["http://localhost:8000", "http://127.0.0.1:8000"];
 const allowedOriginEnv = process.env.FRONTEND_ORIGIN || "";

@@ -29,10 +29,23 @@ export interface DashboardAlert {
   acknowledged: boolean;
 }
 
+export interface DashboardDeviceSummary {
+  id: number;
+  name: string | null;
+  houseId: number | null;
+  houseName: string | null;
+  status: string | null;
+  lastSeenAt: string | null;
+  lastState: string;
+  online: boolean;
+  latestReading: DashboardReading | null;
+}
+
 export interface DashboardPayload {
   ok: boolean;
   latestReading: DashboardReading | null;
   recentReadings: DashboardReading[];
+  devices?: DashboardDeviceSummary[];
   recentAlerts: DashboardAlert[];
   deviceOnline: boolean;
   lastSeenAt: string | null;

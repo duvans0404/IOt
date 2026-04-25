@@ -33,7 +33,7 @@ router.post(
       .trim()
       .isIn(["ACTIVO", "NORMAL", "ALERTA", "FUGA", "ERROR", "INACTIVO", "MANTENIMIENTO"])
       .withMessage("status invalido"),
-    body("houseId").isInt({ min: 1 }).withMessage("houseId invalido")
+    body("houseId").optional({ values: "falsy" }).isInt({ min: 1 }).withMessage("houseId invalido")
   ],
   validate,
   createDevice
@@ -61,7 +61,7 @@ router.put(
       .trim()
       .isIn(["ACTIVO", "NORMAL", "ALERTA", "FUGA", "ERROR", "INACTIVO", "MANTENIMIENTO"])
       .withMessage("status invalido"),
-    body("houseId").isInt({ min: 1 }).withMessage("houseId invalido")
+    body("houseId").optional({ values: "falsy" }).isInt({ min: 1 }).withMessage("houseId invalido")
   ],
   validate,
   updateDevice

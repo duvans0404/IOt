@@ -5,8 +5,12 @@ const STREAM_RETRY_MS = 3000;
 const STREAM_KEEPALIVE_MS = 15000;
 
 const sendDashboardEvent = (res, payload) => {
+  if (res.writableEnded || !res.writable) {
+    return false;
+  }
   res.write("event: dashboard\n");
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  return true;
 };
 
 const buildScopeKey = (user) => `${user?.houseId || "all"}:${user?.role || "guest"}`;
@@ -25,7 +29,7 @@ const attachDashboardStream = (req, res, initialPayload, user) => {
   DASHBOARD_CLIENTS.add(client);
 
   const keepAlive = setInterval(() => {
-    if (!res.writableEnded) {
+    if (!res.writableEnded && res.writable) {
       res.write(": keepalive\n\n");
     }
   }, STREAM_KEEPALIVE_MS);
@@ -55,8 +59,12 @@ const broadcastDashboardUpdate = async () => {
       payloadCache.set(client.scopeKey, await buildPublicDashboardPayload(client.user));
     }
 
-    sendDashboardEvent(client.res, payloadCache.get(client.scopeKey));
+    const sent = sendDashboardEvent(client.res, payloadCache.get(client.scopeKey));
+    if (!sent) {
+      DASHBOARD_CLIENTS.delete(client);
+    }
   }
 };
 
 module.exports = { attachDashboardStream, broadcastDashboardUpdate };
+

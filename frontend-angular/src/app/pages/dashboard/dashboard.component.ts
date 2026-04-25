@@ -4,13 +4,46 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiService } from '../../core/services/api.service';
-import { DashboardPayload, DashboardService, HistoryReading } from '../../core/services/dashboard.service';
+import {
+  DashboardDeviceSummary,
+  DashboardPayload,
+  DashboardReading,
+  DashboardService,
+  HistoryReading
+} from '../../core/services/dashboard.service';
 import { TelemetryChartComponent } from '../../shared/components/telemetry-chart/telemetry-chart.component';
 
 type TimeRange = '1h' | '6h' | '24h' | '7d';
 type DashboardTab = 'overview' | 'readings' | 'alerts' | 'analytics';
 type ReadingStateFilter = 'ALL' | 'NORMAL' | 'ALERTA' | 'FUGA' | 'ERROR';
 type AlertFilter = 'ALL' | 'PENDING' | 'ACK' | 'ALERTA' | 'FUGA' | 'ERROR';
+type DashboardDeviceView = {
+  id: number;
+  name: string | null;
+  houseId: number | null;
+  houseName: string | null;
+  lastState: string;
+  lastTs: string | null;
+  latestReading: DashboardReading | null;
+  isOnline: boolean;
+};
+type RegisteredDevice = {
+  id: number;
+  name: string | null;
+  house_id?: number | null;
+  houseId?: number | null;
+  status?: string | null;
+  last_seen_at?: string | null;
+  lastSeenAt?: string | null;
+  House?: {
+    id: number;
+    name: string;
+  } | null;
+};
+type DeviceCatalogResponse = {
+  ok: boolean;
+  devices: RegisteredDevice[];
+};
 
 @Component({
   selector: 'app-dashboard',
@@ -20,6 +53,7 @@ type AlertFilter = 'ALL' | 'PENDING' | 'ACK' | 'ALERTA' | 'FUGA' | 'ERROR';
 })
 export class DashboardComponent {
   @ViewChild('tabsScroller') private tabsScroller?: ElementRef<HTMLDivElement>;
+  @ViewChild('deviceTabsScroller') private deviceTabsScroller?: ElementRef<HTMLDivElement>;
   private readonly dashboardTabKey = 'dashboard_active_tab';
   private readonly dashboardRangeKey = 'dashboard_range';
   private readonly dashboardReadingFilterKey = 'dashboard_reading_filter';
@@ -35,29 +69,146 @@ export class DashboardComponent {
   readonly transport = signal<'SSE' | 'snapshot' | 'offline'>('snapshot');
   readonly isReconnecting = signal(false);
   readonly actionMessage = signal('');
+  readonly registeredDevices = signal<RegisteredDevice[]>([]);
   readonly activeTab = signal<DashboardTab>(this.restoreTab());
   readonly readingFilter = signal<ReadingStateFilter>(this.restoreReadingFilter());
   readonly alertFilter = signal<AlertFilter>(this.restoreAlertFilter());
   readonly canScrollTabsLeft = signal(false);
   readonly canScrollTabsRight = signal(false);
+  readonly canScrollDeviceTabsLeft = signal(false);
+  readonly canScrollDeviceTabsRight = signal(false);
   readonly selectedRange = signal<TimeRange>(this.restoreRange());
+  readonly selectedDeviceId = signal<number | null>(null);
   readonly historicalReadings = signal<HistoryReading[]>([]);
-  readonly latestReading = computed(() => this.payload()?.latestReading ?? null);
-  readonly activeAlerts = computed(() => (this.payload()?.recentAlerts || []).filter((alert) => !alert.acknowledged));
-  readonly averageRisk = computed(() => {
+
+  readonly uniqueDevices = computed(() => {
+    const payload = this.payload();
+    const map = new Map<number, DashboardDeviceView>();
+
+    for (const device of this.registeredDevices()) {
+      this.upsertDeviceView(map, this.toRegisteredDeviceView(device));
+    }
+
+    for (const device of payload?.devices || []) {
+      this.upsertDeviceView(map, this.toDeviceView(device));
+    }
+
+    if (payload?.latestReading?.deviceId) {
+      this.upsertDeviceView(map, this.toReadingDeviceView(payload.latestReading));
+    }
+
+    const readings = payload?.recentReadings || [];
+    for (const r of readings) {
+      if (!r.deviceId) continue;
+      this.upsertDeviceView(map, this.toReadingDeviceView(r));
+    }
+    return Array.from(map.values()).sort((a, b) => a.id - b.id);
+  });
+
+  readonly hasMultipleDevices = computed(() => this.uniqueDevices().length > 1);
+  readonly selectedDevice = computed(() => {
+    const selectedId = this.selectedDeviceId();
+    if (!selectedId) return null;
+    return this.uniqueDevices().find((device) => device.id === selectedId) || null;
+  });
+
+  readonly deviceCards = computed(() => {
+    const devices = this.uniqueDevices();
+    if (devices.length <= 1) return [];
+    return devices.map((device) => {
+      const reading = device.latestReading;
+      return {
+        device,
+        reading,
+        flow: reading?.flow_lmin ?? 0,
+        pressure: reading?.pressure_kpa ?? 0,
+        risk: reading?.risk ?? 0,
+        state: reading?.state ?? device.lastState,
+        isOnline: device.isOnline
+      };
+    });
+  });
+
+  readonly deviceScopedReadings = computed(() => {
+    const deviceId = this.selectedDeviceId();
     const readings = this.payload()?.recentReadings || [];
+    if (!deviceId) return readings;
+    return readings.filter((r) => r.deviceId === deviceId);
+  });
+
+  readonly deviceScopedAlerts = computed(() => {
+    const deviceId = this.selectedDeviceId();
+    const alerts = this.payload()?.recentAlerts || [];
+    if (!deviceId) return alerts;
+    return alerts.filter((a) => a.deviceId === deviceId);
+  });
+
+  readonly latestReading = computed(() => {
+    const payload = this.payload();
+    const selectedId = this.selectedDeviceId();
+    if (!payload) return null;
+    if (!selectedId) return payload.latestReading;
+    return this.selectedDevice()?.latestReading ?? this.latestReadingFrom(payload.recentReadings, selectedId);
+  });
+
+  readonly currentState = computed(() => {
+    const selected = this.selectedDevice();
+    if (selected) return this.latestReading()?.state || selected.lastState || 'SIN_DATOS';
+    if (this.hasMultipleDevices()) return this.aggregateDeviceState();
+    return this.payload()?.currentState || this.latestReading()?.state || 'SIN_DATOS';
+  });
+  readonly scopedLastSeenAt = computed(() => {
+    const selected = this.selectedDevice();
+    if (selected) return this.latestReading()?.ts || selected.lastTs || null;
+    if (this.hasMultipleDevices()) {
+      return (
+        this.uniqueDevices()
+          .map((device) => device.lastTs)
+          .filter((value): value is string => Boolean(value))
+          .sort((a, b) => this.timestampMs(b) - this.timestampMs(a))[0] || null
+      );
+    }
+    return this.payload()?.lastSeenAt || this.latestReading()?.ts || null;
+  });
+  readonly scopedDeviceOnline = computed(() => {
+    const selected = this.selectedDevice();
+    if (selected) return selected.isOnline;
+    if (this.hasMultipleDevices()) return this.uniqueDevices().some((device) => device.isOnline);
+    return Boolean(this.payload()?.deviceOnline);
+  });
+  readonly highlightedDevice = computed(() => {
+    const selected = this.selectedDevice();
+    if (selected) return selected;
+    return (
+      [...this.uniqueDevices()]
+        .sort((a, b) => {
+          const stateDiff = this.statePriority(b.lastState) - this.statePriority(a.lastState);
+          if (stateDiff) return stateDiff;
+          return this.timestampMs(b.lastTs) - this.timestampMs(a.lastTs);
+        })
+        .find((device) => this.statePriority(device.lastState) >= this.statePriority('ALERTA')) || null
+    );
+  });
+  readonly highlightedReading = computed(() => {
+    const device = this.highlightedDevice();
+    return device ? device.latestReading : this.latestReading();
+  });
+
+  readonly activeAlerts = computed(() => this.deviceScopedAlerts().filter((alert) => !alert.acknowledged));
+  readonly averageRisk = computed(() => {
+    const readings = this.deviceScopedReadings();
     if (!readings.length) return 0;
     return Math.round(readings.reduce((sum, reading) => sum + Number(reading.risk || 0), 0) / readings.length);
   });
   readonly filteredReadings = computed(() => {
     const filter = this.readingFilter();
-    const readings = this.payload()?.recentReadings || [];
+    const readings = this.deviceScopedReadings();
     if (filter === 'ALL') return readings;
     return readings.filter((reading) => reading.state === filter);
   });
   readonly filteredAlerts = computed(() => {
     const filter = this.alertFilter();
-    const alerts = this.payload()?.recentAlerts || [];
+    const alerts = this.deviceScopedAlerts();
     switch (filter) {
       case 'PENDING':
         return alerts.filter((alert) => !alert.acknowledged);
@@ -76,16 +227,29 @@ export class DashboardComponent {
   readonly flowChartPoints = computed(() => this.buildChartPoints('flow_lmin'));
   readonly pressureChartPoints = computed(() => this.buildChartPoints('pressure_kpa'));
   readonly riskChartPoints = computed(() => this.buildChartPoints('risk'));
-  readonly heroTone = computed(() => this.resolveTone(this.payload()?.currentState || 'SIN_DATOS'));
-  readonly lastPacketLabel = computed(() => this.relativeTime(this.payload()?.lastSeenAt || null));
+  readonly heroTone = computed(() => this.resolveTone(this.currentState()));
+  readonly lastPacketLabel = computed(() => this.relativeTime(this.scopedLastSeenAt()));
   readonly deviceHealth = computed(() => {
     const latest = this.latestReading();
+    const device = this.selectedDevice();
+    const isOnline = this.scopedDeviceOnline();
+    if (!device && this.hasMultipleDevices()) {
+      const devices = this.uniqueDevices();
+      const houses = Array.from(new Set(devices.map((item) => item.houseName).filter(Boolean)));
+      return {
+        deviceName: `${devices.length} dispositivos`,
+        houseName: houses.length === 1 ? houses[0] || 'Sin casa' : houses.length > 1 ? `${houses.length} casas` : 'Sin casa',
+        mode: isOnline ? 'Online' : 'En observacion',
+        alerts: this.activeAlerts().length,
+        firmwareHint: 'Vista general'
+      };
+    }
     return {
-      deviceName: latest?.deviceName || 'Sin dispositivo',
-      houseName: latest?.houseName || 'Sin casa',
-      mode: this.payload()?.deviceOnline ? 'Online' : 'En observacion',
+      deviceName: latest?.deviceName || device?.name || 'Sin dispositivo',
+      houseName: latest?.houseName || device?.houseName || 'Sin casa',
+      mode: isOnline ? 'Online' : 'En observacion',
       alerts: this.activeAlerts().length,
-      firmwareHint: latest?.deviceId ? `Nodo #${latest.deviceId}` : 'Sin identificador'
+      firmwareHint: latest?.deviceId || device?.id ? `Nodo #${latest?.deviceId || device?.id}` : 'Sin identificador'
     };
   });
   readonly connectionLabel = computed(() => {
@@ -123,7 +287,7 @@ export class DashboardComponent {
   readonly analyticsHighlights = computed(() => {
     const readings = this.historicalReadings().length
       ? this.historicalReadings()
-      : ((this.payload()?.recentReadings || []) as Array<HistoryReading | DashboardPayload['recentReadings'][number]>);
+      : ((this.deviceScopedReadings()) as Array<HistoryReading | DashboardPayload['recentReadings'][number]>);
     const normalized = readings.map((reading) => ({
       flow: Number(reading.flow_lmin || 0),
       pressure: Number(reading.pressure_kpa || 0),
@@ -154,6 +318,7 @@ export class DashboardComponent {
 
   constructor() {
     this.destroyRef.onDestroy(() => this.clearReconnectTimer());
+    this.loadRegisteredDevices();
     this.loadSnapshot();
     queueMicrotask(() => this.updateTabsScrollState());
   }
@@ -161,6 +326,7 @@ export class DashboardComponent {
   @HostListener('window:resize')
   protected onWindowResize() {
     this.updateTabsScrollState();
+    this.updateDeviceTabsScrollState();
   }
 
   private loadSnapshot() {
@@ -169,7 +335,7 @@ export class DashboardComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (payload) => {
-          this.payload.set(payload);
+          this.applyDashboardPayload(payload);
           this.isLoading.set(false);
           this.transport.set('snapshot');
           this.isReconnecting.set(false);
@@ -189,7 +355,7 @@ export class DashboardComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (payload) => {
-          this.payload.set(payload);
+          this.applyDashboardPayload(payload);
           this.transport.set('SSE');
           this.isReconnecting.set(false);
           this.clearReconnectTimer();
@@ -252,6 +418,12 @@ export class DashboardComponent {
     localStorage.setItem(this.dashboardAlertFilterKey, filter);
   }
 
+  protected selectDevice(deviceId: number | null) {
+    this.selectedDeviceId.set(deviceId);
+    void this.loadHistory();
+    queueMicrotask(() => this.updateDeviceTabsScrollState());
+  }
+
   protected scrollTabs(direction: 'left' | 'right') {
     const host = this.tabsScroller?.nativeElement;
     if (!host) return;
@@ -263,14 +435,29 @@ export class DashboardComponent {
     window.setTimeout(() => this.updateTabsScrollState(), 220);
   }
 
+  protected scrollDeviceTabs(direction: 'left' | 'right') {
+    const host = this.deviceTabsScroller?.nativeElement;
+    if (!host) return;
+    const amount = Math.max(220, Math.round(host.clientWidth * 0.55));
+    host.scrollBy({
+      left: direction === 'right' ? amount : -amount,
+      behavior: 'smooth'
+    });
+    window.setTimeout(() => this.updateDeviceTabsScrollState(), 220);
+  }
+
   protected onTabsScroll() {
     this.updateTabsScrollState();
+  }
+
+  protected onDeviceTabsScroll() {
+    this.updateDeviceTabsScrollState();
   }
 
   protected tabBadge(tab: DashboardTab) {
     switch (tab) {
       case 'readings':
-        return this.payload()?.recentReadings.length || 0;
+        return this.deviceScopedReadings().length || 0;
       case 'alerts':
         return this.activeAlerts().length;
       case 'analytics':
@@ -280,8 +467,120 @@ export class DashboardComponent {
     }
   }
 
+  private toDeviceView(device: DashboardDeviceSummary): DashboardDeviceView {
+    return {
+      id: device.id,
+      name: device.name || device.latestReading?.deviceName || null,
+      houseId: device.houseId || device.latestReading?.houseId || null,
+      houseName: device.houseName || device.latestReading?.houseName || null,
+      lastState: device.lastState || device.latestReading?.state || device.status || 'SIN_DATOS',
+      lastTs: device.latestReading?.ts || device.lastSeenAt || null,
+      latestReading: device.latestReading || null,
+      isOnline: Boolean(device.online)
+    };
+  }
+
+  private toRegisteredDeviceView(device: RegisteredDevice): DashboardDeviceView {
+    const house = device.House || null;
+    const houseId = device.houseId ?? device.house_id ?? house?.id ?? null;
+    const lastSeenAt = device.lastSeenAt ?? device.last_seen_at ?? null;
+    return {
+      id: device.id,
+      name: device.name || null,
+      houseId,
+      houseName: house?.name || null,
+      lastState: device.status || 'SIN_DATOS',
+      lastTs: lastSeenAt,
+      latestReading: null,
+      isOnline: this.isOnlineAt(lastSeenAt)
+    };
+  }
+
+  private toReadingDeviceView(reading: DashboardReading): DashboardDeviceView {
+    return {
+      id: reading.deviceId,
+      name: reading.deviceName || null,
+      houseId: reading.houseId || null,
+      houseName: reading.houseName || null,
+      lastState: reading.state,
+      lastTs: reading.ts,
+      latestReading: reading,
+      isOnline: this.isOnlineAt(reading.ts)
+    };
+  }
+
+  private upsertDeviceView(map: Map<number, DashboardDeviceView>, candidate: DashboardDeviceView) {
+    const existing = map.get(candidate.id);
+    if (!existing) {
+      map.set(candidate.id, candidate);
+      return;
+    }
+
+    const candidateTs = this.timestampMs(candidate.lastTs);
+    const existingTs = this.timestampMs(existing.lastTs);
+    const candidateHasNewerTelemetry =
+      Boolean(candidate.latestReading) && (!existing.latestReading || candidateTs >= existingTs);
+    const candidateHasBetterStatus =
+      candidateTs > existingTs || (existing.lastState === 'SIN_DATOS' && candidate.lastState !== 'SIN_DATOS');
+
+    map.set(candidate.id, {
+      id: existing.id,
+      name: candidate.name || existing.name,
+      houseId: candidate.houseId ?? existing.houseId,
+      houseName: candidate.houseName || existing.houseName,
+      lastState: candidateHasNewerTelemetry || candidateHasBetterStatus ? candidate.lastState : existing.lastState,
+      lastTs: candidateTs >= existingTs && candidate.lastTs ? candidate.lastTs : existing.lastTs || candidate.lastTs,
+      latestReading: candidateHasNewerTelemetry ? candidate.latestReading : existing.latestReading || candidate.latestReading,
+      isOnline: existing.isOnline || candidate.isOnline
+    });
+  }
+
+  private latestReadingFrom(readings: DashboardReading[], deviceId: number) {
+    return readings.reduce<DashboardReading | null>((latest, reading) => {
+      if (reading.deviceId !== deviceId) return latest;
+      if (!latest || this.timestampMs(reading.ts) > this.timestampMs(latest.ts)) return reading;
+      return latest;
+    }, null);
+  }
+
+  private timestampMs(value: string | null | undefined) {
+    if (!value) return 0;
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+
+  private isOnlineAt(value: string | null | undefined) {
+    const timestamp = this.timestampMs(value);
+    return timestamp > 0 && Date.now() - timestamp <= 10000;
+  }
+
+  private statePriority(state: string | null | undefined) {
+    switch (state) {
+      case 'FUGA':
+        return 5;
+      case 'ERROR':
+        return 4;
+      case 'ALERTA':
+        return 3;
+      case 'NORMAL':
+        return 2;
+      case 'ACTIVO':
+        return 1;
+      default:
+        return 0;
+    }
+  }
+
+  private aggregateDeviceState() {
+    return (
+      [...this.uniqueDevices()]
+        .sort((a, b) => this.statePriority(b.lastState) - this.statePriority(a.lastState))
+        [0]?.lastState || this.payload()?.currentState || 'SIN_DATOS'
+    );
+  }
+
   private buildSeries(metric: 'flow_lmin' | 'pressure_kpa') {
-    const readings = this.payload()?.recentReadings || [];
+    const readings = this.deviceScopedReadings();
     const values = readings.map((reading) => Number(reading[metric] || 0));
     const peak = Math.max(...values, 1);
 
@@ -297,7 +596,7 @@ export class DashboardComponent {
   private buildChartPoints(metric: 'flow_lmin' | 'pressure_kpa' | 'risk') {
     const source = this.historicalReadings().length
       ? [...this.historicalReadings()].reverse()
-      : [...(this.payload()?.recentReadings || [])];
+      : [...this.deviceScopedReadings()];
     const readings = source.slice(-7);
     return readings.map((reading) => ({
       value: Number(reading[metric] || 0),
@@ -306,17 +605,14 @@ export class DashboardComponent {
   }
 
   private async loadHistory() {
-    const latest = this.latestReading();
-    if (!latest) return;
-
     this.historyLoading.set(true);
     try {
+      const selectedDeviceId = this.selectedDeviceId();
       const response = await firstValueFrom(
         this.dashboardService.readings({
           limit: this.selectedRange() === '7d' ? 140 : 96,
           from: this.buildFromDate(this.selectedRange()),
-          deviceId: latest.deviceId || undefined,
-          houseId: latest.houseId || undefined
+          deviceId: selectedDeviceId || undefined
         })
       );
       this.historicalReadings.set(response.readings || []);
@@ -325,6 +621,28 @@ export class DashboardComponent {
     } finally {
       this.historyLoading.set(false);
     }
+  }
+
+  private loadRegisteredDevices() {
+    this.api
+      .get<DeviceCatalogResponse>('/api/devices', { limit: 200 })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.registeredDevices.set(response.devices || []);
+          this.ensureSelectedDeviceIsVisible();
+          queueMicrotask(() => this.updateDeviceTabsScrollState());
+        },
+        error: () => {
+          this.registeredDevices.set([]);
+        }
+      });
+  }
+
+  private applyDashboardPayload(payload: DashboardPayload) {
+    this.payload.set(payload);
+    this.ensureSelectedDeviceIsVisible();
+    queueMicrotask(() => this.updateDeviceTabsScrollState());
   }
 
   private resolveTone(state: string) {
@@ -353,7 +671,7 @@ export class DashboardComponent {
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: (payload) => {
-            this.payload.set(payload);
+            this.applyDashboardPayload(payload);
             this.transport.set('snapshot');
             this.connectStream();
           },
@@ -371,7 +689,14 @@ export class DashboardComponent {
     this.reconnectTimer = null;
   }
 
-  private relativeTime(value: string | null) {
+  private ensureSelectedDeviceIsVisible() {
+    const selectedId = this.selectedDeviceId();
+    if (!selectedId) return;
+    if (this.uniqueDevices().some((device) => device.id === selectedId)) return;
+    this.selectedDeviceId.set(null);
+  }
+
+  protected relativeTime(value: string | null) {
     if (!value) return 'Sin paquetes';
     const deltaSeconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
     if (deltaSeconds < 5) return 'Hace instantes';
@@ -456,5 +781,13 @@ export class DashboardComponent {
     const maxScrollLeft = Math.max(0, host.scrollWidth - host.clientWidth);
     this.canScrollTabsLeft.set(host.scrollLeft > 8);
     this.canScrollTabsRight.set(host.scrollLeft < maxScrollLeft - 8);
+  }
+
+  private updateDeviceTabsScrollState() {
+    const host = this.deviceTabsScroller?.nativeElement;
+    if (!host) return;
+    const maxScrollLeft = Math.max(0, host.scrollWidth - host.clientWidth);
+    this.canScrollDeviceTabsLeft.set(host.scrollLeft > 8);
+    this.canScrollDeviceTabsRight.set(host.scrollLeft < maxScrollLeft - 8);
   }
 }

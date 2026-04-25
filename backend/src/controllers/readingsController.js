@@ -1,5 +1,5 @@
 const { Op } = require("sequelize");
-const { Device, Reading, Alert, House } = require("../models");
+const { sequelize, Device, Reading, Alert, House } = require("../models");
 const { broadcastDashboardUpdate } = require("../services/dashboardStream");
 const { getUserHouseScope } = require("../middlewares/authorize");
 const { resolvePagination } = require("../utils/pagination");
@@ -22,10 +22,19 @@ const normalizeTimestamp = (rawTs) => {
   return parsed;
 };
 
-const ensureDevice = async ({ deviceId, deviceName, houseId, deviceType, firmwareVersion, hardwareUid, authenticatedDevice }) => {
+const ensureDevice = async ({
+  deviceId,
+  deviceName,
+  houseId,
+  deviceType,
+  firmwareVersion,
+  hardwareUid,
+  authenticatedDevice,
+  transaction
+}) => {
   let house = null;
   if (houseId) {
-    house = await House.findByPk(houseId);
+    house = await House.findByPk(houseId, { transaction });
     if (!house) {
       const error = new Error("houseId no encontrado");
       error.status = 404;
@@ -34,7 +43,7 @@ const ensureDevice = async ({ deviceId, deviceName, houseId, deviceType, firmwar
   }
 
   if (deviceId) {
-    const device = await Device.findByPk(deviceId);
+    const device = await Device.findByPk(deviceId, { transaction });
     if (!device) {
       const error = new Error("deviceId no encontrado");
       error.status = 404;
@@ -48,7 +57,7 @@ const ensureDevice = async ({ deviceId, deviceName, houseId, deviceType, firmwar
     }
 
     if (house && !device.house_id) {
-      await device.update({ house_id: house.id });
+      await device.update({ house_id: house.id }, { transaction });
     }
 
     const metadataPatch = {};
@@ -56,7 +65,7 @@ const ensureDevice = async ({ deviceId, deviceName, houseId, deviceType, firmwar
     if (firmwareVersion && device.firmware_version !== firmwareVersion) metadataPatch.firmware_version = firmwareVersion;
     if (hardwareUid && !device.hardware_uid) metadataPatch.hardware_uid = hardwareUid;
     if (Object.keys(metadataPatch).length) {
-      await device.update(metadataPatch);
+      await device.update(metadataPatch, { transaction });
     }
 
     return device;
@@ -64,7 +73,7 @@ const ensureDevice = async ({ deviceId, deviceName, houseId, deviceType, firmwar
 
   const name = String(deviceName || "").trim();
   if (authenticatedDevice) {
-    return Device.findByPk(authenticatedDevice.id);
+    return Device.findByPk(authenticatedDevice.id, { transaction });
   }
   const [device] = await Device.findOrCreate({
     where: { name },
@@ -75,7 +84,8 @@ const ensureDevice = async ({ deviceId, deviceName, houseId, deviceType, firmwar
       device_type: deviceType || null,
       firmware_version: firmwareVersion || null,
       hardware_uid: hardwareUid || null
-    }
+    },
+    transaction
   });
 
   const metadataPatch = {};
@@ -84,7 +94,7 @@ const ensureDevice = async ({ deviceId, deviceName, houseId, deviceType, firmwar
   if (firmwareVersion && device.firmware_version !== firmwareVersion) metadataPatch.firmware_version = firmwareVersion;
   if (hardwareUid && !device.hardware_uid) metadataPatch.hardware_uid = hardwareUid;
   if (Object.keys(metadataPatch).length) {
-    await device.update(metadataPatch);
+    await device.update(metadataPatch, { transaction });
   }
 
   return device;
@@ -97,44 +107,71 @@ const createReading = async (req, res, next) => {
     const normalizedDeviceType = deviceType ? String(deviceType).trim() : null;
     const normalizedFirmwareVersion = firmwareVersion ? String(firmwareVersion).trim() : null;
     const normalizedHardwareUid = hardwareUid ? String(hardwareUid).trim() : null;
-    const device = await ensureDevice({
-      houseId,
-      deviceId,
-      deviceName,
-      deviceType: normalizedDeviceType,
-      firmwareVersion: normalizedFirmwareVersion,
-      hardwareUid: normalizedHardwareUid,
-      authenticatedDevice: req.authenticatedDevice || null
-    });
-    const previousStatus = device.status || "NORMAL";
     const timestamp = normalizeTimestamp(ts);
 
-    const reading = await Reading.create({
-      device_id: device.id,
-      ts: timestamp,
-      flow_lmin,
-      pressure_kpa,
-      risk,
-      state
-    });
-
-    await device.update({
-      status: state,
-      last_seen_at: timestamp,
-      device_type: normalizedDeviceType || device.device_type || null,
-      firmware_version: normalizedFirmwareVersion || device.firmware_version || null,
-      hardware_uid: normalizedHardwareUid || device.hardware_uid || null
-    });
-
-    if (state !== "NORMAL" && previousStatus !== state) {
-      await Alert.create({
-        device_id: device.id,
-        ts: timestamp,
-        severity: state,
-        message: `Estado ${state} | Flujo ${flow_lmin} L/min | Presion ${pressure_kpa} kPa | Riesgo ${risk}%`,
-        acknowledged: false
+    const reading = await sequelize.transaction(async (transaction) => {
+      const device = await ensureDevice({
+        houseId,
+        deviceId,
+        deviceName,
+        deviceType: normalizedDeviceType,
+        firmwareVersion: normalizedFirmwareVersion,
+        hardwareUid: normalizedHardwareUid,
+        authenticatedDevice: req.authenticatedDevice || null,
+        transaction
       });
-    }
+      const previousStatus = device.status || "NORMAL";
+
+      const createdReading = await Reading.create(
+        {
+          device_id: device.id,
+          ts: timestamp,
+          flow_lmin,
+          pressure_kpa,
+          risk,
+          state
+        },
+        { transaction }
+      );
+
+      await device.update(
+        {
+          status: state,
+          last_seen_at: timestamp,
+          device_type: normalizedDeviceType || device.device_type || null,
+          firmware_version: normalizedFirmwareVersion || device.firmware_version || null,
+          hardware_uid: normalizedHardwareUid || device.hardware_uid || null
+        },
+        { transaction }
+      );
+
+      if (state !== "NORMAL" && previousStatus !== state) {
+        const recentOpenAlert = await Alert.findOne({
+          where: {
+            device_id: device.id,
+            severity: state,
+            acknowledged: false
+          },
+          order: [["ts", "DESC"]],
+          transaction
+        });
+
+        if (!recentOpenAlert) {
+          await Alert.create(
+            {
+              device_id: device.id,
+              ts: timestamp,
+              severity: state,
+              message: `Estado ${state} | Flujo ${flow_lmin} L/min | Presion ${pressure_kpa} kPa | Riesgo ${risk}%`,
+              acknowledged: false
+            },
+            { transaction }
+          );
+        }
+      }
+
+      return createdReading;
+    });
 
     broadcastDashboardUpdate().catch((error) => {
       console.error("No se pudo emitir la actualizacion del dashboard:", error);

@@ -1,13 +1,13 @@
 require("dotenv").config();
 const app = require("./app");
 const { sequelize } = require("./models");
-const { validateRuntimeConfig } = require("./config/env");
+const { validateRuntimeConfig, shouldSyncSchema } = require("./config/env");
 const { runMigrations } = require("./db/migrate");
 
 const PORT = process.env.PORT || 3000;
 const isProd = process.env.NODE_ENV === "production";
-const shouldSyncSchema = process.env.DB_USE_SYNC !== "false";
-const shouldAlterSchema = shouldSyncSchema && !isProd && process.env.DB_SYNC_ALTER === "true";
+const syncSchemaEnabled = shouldSyncSchema();
+const shouldAlterSchema = syncSchemaEnabled && !isProd && process.env.DB_SYNC_ALTER === "true";
 const shouldRunMigrations = process.env.DB_RUN_MIGRATIONS !== "false";
 
 async function start() {
@@ -17,7 +17,7 @@ async function start() {
     if (shouldRunMigrations) {
       await runMigrations(sequelize);
     }
-    if (shouldSyncSchema) {
+    if (syncSchemaEnabled) {
       await sequelize.sync({ alter: shouldAlterSchema });
     }
     app.listen(PORT, () => {

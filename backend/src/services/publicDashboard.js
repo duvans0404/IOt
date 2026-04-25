@@ -30,10 +30,48 @@ const mapAlert = (alert) => ({
   ack_at: alert.ack_at
 });
 
+const isOnlineAt = (value, nowMs = Date.now()) => {
+  const timestampMs = value ? new Date(value).getTime() : Number.NaN;
+  const isValidTimestamp = Number.isFinite(timestampMs) && timestampMs <= nowMs + FUTURE_TOLERANCE_MS;
+  return isValidTimestamp ? nowMs - timestampMs <= ONLINE_WINDOW_MS : false;
+};
+
+const mapDeviceReading = (reading, device) => {
+  if (!reading) return null;
+  return {
+    id: reading.id,
+    deviceId: device.id,
+    deviceName: device.name || null,
+    houseId: device.House?.id || device.house_id || null,
+    houseName: device.House?.name || null,
+    ts: reading.ts,
+    flow_lmin: reading.flow_lmin,
+    pressure_kpa: reading.pressure_kpa,
+    risk: reading.risk,
+    state: reading.state
+  };
+};
+
+const mapDeviceSummary = (device, latestReading, nowMs) => {
+  const mappedReading = mapDeviceReading(latestReading, device);
+  const lastSeenAt = mappedReading?.ts || device.last_seen_at || null;
+  return {
+    id: device.id,
+    name: device.name || null,
+    houseId: device.House?.id || device.house_id || null,
+    houseName: device.House?.name || null,
+    status: device.status || null,
+    lastSeenAt,
+    lastState: mappedReading?.state || device.status || "SIN_DATOS",
+    online: isOnlineAt(lastSeenAt, nowMs),
+    latestReading: mappedReading
+  };
+};
+
 const buildPublicDashboardPayload = async (user) => {
   const scopedHouseId = getUserHouseScope(user);
   const scopedWhere = scopedHouseId ? { "$Device.house_id$": scopedHouseId } : undefined;
-  const [latestReadingRaw, recentReadingsRaw, recentAlertsRaw] = await Promise.all([
+  const [latestReadingRaw, recentReadingsRaw, recentAlertsRaw, devicesRaw] = await Promise.all([
     Reading.findOne({
       include: [
         {
@@ -68,23 +106,41 @@ const buildPublicDashboardPayload = async (user) => {
       where: scopedWhere,
       order: [["ts", "DESC"]],
       limit: 20
+    }),
+    Device.findAll({
+      attributes: ["id", "name", "house_id", "status", "last_seen_at"],
+      where: scopedHouseId ? { house_id: scopedHouseId } : undefined,
+      include: [{ model: House, attributes: ["id", "name"], required: false }],
+      order: [["id", "ASC"]],
+      limit: 200
     })
   ]);
 
+  const latestReadingsByDevice = new Map(
+    await Promise.all(
+      devicesRaw.map(async (device) => {
+        const reading = await Reading.findOne({
+          where: { device_id: device.id },
+          order: [["ts", "DESC"]]
+        });
+        return [device.id, reading];
+      })
+    )
+  );
+  const nowMs = Date.now();
   const latestReading = latestReadingRaw ? mapReading(latestReadingRaw) : null;
   const recentReadings = recentReadingsRaw.map(mapReading).reverse();
   const recentAlerts = recentAlertsRaw.map(mapAlert);
+  const devices = devicesRaw.map((device) => mapDeviceSummary(device, latestReadingsByDevice.get(device.id), nowMs));
   const lastSeenAt = latestReading?.ts || null;
-  const lastSeenMs = lastSeenAt ? new Date(lastSeenAt).getTime() : Number.NaN;
-  const nowMs = Date.now();
-  const isValidLastSeen = Number.isFinite(lastSeenMs) && lastSeenMs <= nowMs + FUTURE_TOLERANCE_MS;
-  const deviceOnline = isValidLastSeen ? nowMs - lastSeenMs <= ONLINE_WINDOW_MS : false;
+  const deviceOnline = devices.length ? devices.some((device) => device.online) : isOnlineAt(lastSeenAt, nowMs);
   const currentState = latestReading?.state || "SIN_DATOS";
 
   return {
     ok: true,
     latestReading,
     recentReadings,
+    devices,
     recentAlerts,
     deviceOnline,
     lastSeenAt,

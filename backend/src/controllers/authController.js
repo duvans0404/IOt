@@ -7,6 +7,11 @@ const { normalizeRole } = require("../middlewares/authorize");
 const register = async (req, res, next) => {
   try {
     const { nombre, email, password } = req.body;
+
+    if (req.body.houseId !== undefined && req.body.houseId !== null && req.body.houseId !== "") {
+      return res.status(400).json({ ok: false, msg: "No puedes asignar una casa durante el registro publico" });
+    }
+
     const exists = await User.findOne({ where: { email } });
     if (exists) {
       return res.status(409).json({ ok: false, msg: "Email ya registrado" });

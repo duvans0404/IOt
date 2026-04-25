@@ -67,16 +67,13 @@ const createTestServer = (app) =>
     server.on("error", reject);
   });
 
-test("registro publico ignora cualquier asociacion de casa enviada por el cliente", async () => {
-  let createPayload = null;
-
+test("registro publico rechaza asociacion de casa enviada por el cliente", async () => {
   await withFreshApp(
     {
       "src/models/index.js": {
         User: {
           findOne: async () => null,
           create: async (payload) => {
-            createPayload = payload;
             return { id: 17, ...payload };
           }
         },
@@ -87,7 +84,8 @@ test("registro publico ignora cualquier asociacion de casa enviada por el client
         }
       },
       "src/config/env.js": {
-        getJwtSecret: () => TEST_JWT_SECRET
+        getJwtSecret: () => TEST_JWT_SECRET,
+        getTrustProxySetting: () => false
       },
       "src/middlewares/authorize.js": {
         normalizeRole: (value) => String(value || "").trim().toLowerCase()
@@ -114,10 +112,8 @@ test("registro publico ignora cualquier asociacion de casa enviada por el client
           }
         });
 
-        assert.equal(response.statusCode, 201);
-        assert.equal(createPayload.house_id, null);
-        assert.equal(createPayload.role, "resident");
-        assert.deepEqual(response.body.user.house, null);
+        assert.equal(response.statusCode, 400);
+        assert.equal(response.body.msg, "No puedes asignar una casa durante el registro publico");
       } finally {
         await server.close();
       }
@@ -130,7 +126,8 @@ test("lecturas sin x-device-key son rechazadas", async () => {
     {
       "src/config/env.js": {
         getIngestApiKey: () => TEST_DEVICE_KEY,
-        getJwtSecret: () => TEST_JWT_SECRET
+        getJwtSecret: () => TEST_JWT_SECRET,
+        getTrustProxySetting: () => false
       }
     },
     async (app) => {
@@ -176,9 +173,16 @@ test("lecturas aceptan credencial propia del dispositivo", async () => {
     {
       "src/config/env.js": {
         getIngestApiKey: () => TEST_DEVICE_KEY,
-        getJwtSecret: () => TEST_JWT_SECRET
+        getJwtSecret: () => TEST_JWT_SECRET,
+        getTrustProxySetting: () => false
       },
       "src/models/index.js": {
+        sequelize: {
+          transaction: async (fn) => {
+            const fakeTransaction = { commit: async () => {}, rollback: async () => {} };
+            return fn(fakeTransaction);
+          }
+        },
         Device: {
           findByPk: async () => deviceRecord,
           findOne: async () => null
@@ -187,6 +191,7 @@ test("lecturas aceptan credencial propia del dispositivo", async () => {
           create: async (payload) => ({ id: 77, ...payload })
         },
         Alert: {
+          findOne: async () => null,
           create: async () => ({ id: 33 })
         },
         House: {
@@ -241,7 +246,8 @@ test("credencial propia no puede reportar como otro dispositivo", async () => {
     {
       "src/config/env.js": {
         getIngestApiKey: () => TEST_DEVICE_KEY,
-        getJwtSecret: () => TEST_JWT_SECRET
+        getJwtSecret: () => TEST_JWT_SECRET,
+        getTrustProxySetting: () => false
       },
       "src/models/index.js": {
         Device: {
@@ -286,7 +292,8 @@ test("token por query string no funciona fuera del stream", async () => {
   await withFreshApp(
     {
       "src/config/env.js": {
-        getJwtSecret: () => TEST_JWT_SECRET
+        getJwtSecret: () => TEST_JWT_SECRET,
+        getTrustProxySetting: () => false
       },
       "src/services/publicDashboard.js": {
         buildPublicDashboardPayload: async () => ({ ok: true, latestReading: null, recentReadings: [], recentAlerts: [] })
@@ -319,7 +326,8 @@ test("stream de dashboard si acepta token por query string", async () => {
   await withFreshApp(
     {
       "src/config/env.js": {
-        getJwtSecret: () => TEST_JWT_SECRET
+        getJwtSecret: () => TEST_JWT_SECRET,
+        getTrustProxySetting: () => false
       },
       "src/services/publicDashboard.js": {
         buildPublicDashboardPayload: async (user) => ({
@@ -372,7 +380,8 @@ test("login aplica rate limit por IP", async () => {
           House: {}
         },
         "src/config/env.js": {
-          getJwtSecret: () => TEST_JWT_SECRET
+          getJwtSecret: () => TEST_JWT_SECRET,
+          getTrustProxySetting: () => false
         }
       },
       async (app) => {

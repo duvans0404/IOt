@@ -15,26 +15,27 @@
     </a>
 
     <nav class="app-nav" aria-label="Navegacion principal">
-      <a routerLink="/dashboard" routerLinkActive="is-active">Dashboard</a>
-      <a routerLink="/admin" routerLinkActive="is-active">Admin</a>
-      @if (!auth.isAuthenticated()) {
-        <a routerLink="/login" routerLinkActive="is-active">Entrar</a>
-        <a routerLink="/register" routerLinkActive="is-active">Registro</a>
+      @if (auth.isAuthenticated()) {
+        <a routerLink="/dashboard" routerLinkActive="is-active">Dashboard</a>
+        @if (auth.isAdmin()) {
+          <a routerLink="/admin" routerLinkActive="is-active">Admin</a>
+        }
       }
     </nav>
 
     <div class="app-header__actions">
-      <div class="route-chip" [attr.data-tone]="routeTone()">
-        <span>Escena</span>
-        <strong>{{ currentRoute() }}</strong>
-      </div>
       @if (auth.currentUser(); as user) {
+        <div class="route-chip" [attr.data-tone]="routeTone()">
+          <span>Escena</span>
+          <strong>{{ currentRoute() }}</strong>
+        </div>
         <div class="operator-chip">
           <span>{{ user.nombre }}</span>
           <small>{{ user.role | uppercase }}</small>
         </div>
         <button type="button" class="ghost-button" (click)="logout()">Cerrar sesion</button>
       } @else {
+        <a class="ghost-button" routerLink="/register" routerLinkActive="is-active">Registro</a>
         <a class="primary-button" routerLink="/login">Acceder</a>
       }
     </div>

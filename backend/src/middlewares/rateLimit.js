@@ -1,3 +1,7 @@
+// NOTA: Este rate limiter usa almacenamiento en memoria (Map).
+// En entornos con multiples instancias del backend (ej. Railway con scaling),
+// el limite se aplica por instancia individual, no globalmente.
+// Para produccion con escalado horizontal, considerar Redis o un store compartido.
 const DEFAULT_WINDOW_MS = 15 * 60 * 1000;
 const DEFAULT_MAX_REQUESTS = 10;
 const RATE_LIMIT_STORE = new Map();

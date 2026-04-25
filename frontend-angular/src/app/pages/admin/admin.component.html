@@ -110,7 +110,7 @@
                 <span class="eyebrow">Casas</span>
                 <h2>Mapa operativo</h2>
               </div>
-              <button type="button" class="ghost-action" (click)="resetHouseForm()">Nueva casa</button>
+              <button type="button" class="ghost-action" (click)="openCreateHouseModal()">Nueva casa</button>
             </header>
 
             <div class="table-shell">
@@ -159,7 +159,7 @@
                 <span class="eyebrow">Usuarios</span>
                 <h2>Acceso y roles</h2>
               </div>
-              <button type="button" class="ghost-action" (click)="resetUserForm()">Nuevo usuario</button>
+              <button type="button" class="ghost-action" (click)="openCreateUserModal()">Nuevo usuario</button>
             </header>
 
             <div class="table-shell">
@@ -204,7 +204,7 @@
                 <span class="eyebrow">Dispositivos</span>
                 <h2>Provisioning multi nodo</h2>
               </div>
-              <button type="button" class="ghost-action" (click)="resetDeviceForm()">Nuevo dispositivo</button>
+              <button type="button" class="ghost-action" (click)="openCreateDeviceModal()">Nuevo dispositivo</button>
             </header>
 
             <div class="table-shell">
@@ -489,7 +489,7 @@
       <label>
         <span>Casa</span>
         <select formControlName="houseId">
-          <option [ngValue]="0">Selecciona una casa</option>
+          <option [ngValue]="null">Selecciona una casa</option>
           @for (house of houses(); track trackById) {
             <option [ngValue]="house.id">{{ house.name }} · {{ house.code }}</option>
           }

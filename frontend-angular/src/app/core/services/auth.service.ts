@@ -39,6 +39,7 @@ export class AuthService {
   private sessionLoadPromise: Promise<void> | null = null;
   readonly currentUser = signal<AuthUser | null>(null);
   readonly isAuthenticated = computed(() => Boolean(this.tokenState() && this.currentUser()));
+  readonly isAdmin = computed(() => this.currentUser()?.role === 'admin');
 
   async ensureSessionLoaded() {
     if (this.bootstrapped()) return;

@@ -141,6 +141,7 @@ module.exports = {
     await ensureIndex(queryInterface, "houses", ["status"], { name: "houses_status_idx" }, transaction);
     await ensureIndex(queryInterface, "devices", ["house_id"], { name: "devices_house_id_idx" }, transaction);
     await ensureIndex(queryInterface, "devices", ["status"], { name: "devices_status_idx" }, transaction);
+    await ensureIndex(queryInterface, "devices", ["hardware_uid"], { name: "devices_hardware_uid_idx", unique: true }, transaction);
     await ensureIndex(queryInterface, "users", ["house_id"], { name: "users_house_id_idx" }, transaction);
     await ensureIndex(queryInterface, "users", ["role"], { name: "users_role_idx" }, transaction);
     await ensureIndex(queryInterface, "readings", ["device_id"], { name: "readings_device_id_idx" }, transaction);

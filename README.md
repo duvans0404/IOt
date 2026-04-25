@@ -5,7 +5,7 @@ Este proyecto conecta una simulacion ESP32 en Wokwi con un backend Node.js + MyS
 ## Estructura principal
 
 - `simulacion/simulacion.ino`: firmware del ESP32
-- `frontend/`: UI canonica desplegada como sitio estatico
+- `frontend-angular/`: UI oficial del proyecto (Angular 19) desplegada como sitio estatico
 - `backend/`: API REST, autenticacion JWT y almacenamiento MySQL
 - `simulacion/diagram.json`: circuito Wokwi
 - `simulacion/wokwi.toml`: configuracion Wokwi para VS Code
@@ -21,7 +21,7 @@ Este proyecto conecta una simulacion ESP32 en Wokwi con un backend Node.js + MyS
 - LED verde, naranja y rojo
 - Buzzer
 - Envio HTTP directo al backend
-- Panel principal en su URL publica de frontend
+- Panel principal (Angular) en su URL publica de frontend
 
 ## Flujo actual
 
@@ -29,7 +29,7 @@ Este proyecto conecta una simulacion ESP32 en Wokwi con un backend Node.js + MyS
 2. La logica local calcula riesgo y estado (`NORMAL`, `ALERTA`, `FUGA`, `ERROR`).
 3. El ESP32 publica la lectura a `POST /api/readings` con `x-device-key`.
 4. El backend guarda lecturas y alertas en MySQL.
-5. El frontend consulta `GET /api/public/dashboard` cada 2 segundos (URL del backend).
+5. El frontend Angular consulta `GET /api/public/dashboard` y mantiene stream SSE contra la URL del backend.
 6. Los operadores pueden confirmar alertas desde el panel usando JWT.
 
 ## Wokwi en VS Code
@@ -106,15 +106,16 @@ npm run dev
 ```
 
 - API health: `http://localhost:3000/api/health`
-- Frontend local separado:
+- Frontend Angular local:
 
 ```bash
-cd frontend
+cd frontend-angular
 npm install
 npm run dev
 ```
 
-- Frontend local separado: `http://localhost:8000/`
+- Frontend local en `http://localhost:8000/`
+- La URL del backend se configura desde `frontend-angular/public/app-config.js` (`window.__APP_CONFIG__.apiBaseUrl`). Para despliegue, sustituye ese valor por la URL publica del backend.
 - Si usas la base Railway desde local, deja `DB_SYNC_ALTER=false` para no intentar alterar el esquema remoto al arrancar.
 
 ### Endpoints principales
@@ -142,7 +143,10 @@ El backend devuelve `pagination` en listas paginadas y agrega `X-Request-Id` en 
 
 ```json
 {
+  "deviceId": 12,
+  "houseId": 3,
   "deviceName": "ESP32-WOKWI-01",
+  "hardwareUid": "HW-WOKWI-ESP32-01",
   "flow_lmin": 1.8,
   "pressure_kpa": 100.4,
   "risk": 62,
@@ -157,6 +161,20 @@ x-device-key: <tu_ingest_api_key>
 ```
 
 El backend sigue aceptando la `INGEST_API_KEY` global y ahora tambien puede validar una clave propia por dispositivo si ya fue provisionada desde el panel/admin API.
+
+Para un entorno con multiples casas y usuarios:
+
+- crea primero la casa y el dispositivo desde el panel admin
+- asigna el dispositivo a su `houseId`
+- compila la simulacion con ese `DEVICE_ID_VALUE` o, como minimo, con `HOUSE_ID_VALUE` y `DEVICE_HARDWARE_UID_VALUE`
+- si rotas una credencial propia del dispositivo, usa esa clave como `INGEST_API_KEY_VALUE`
+
+Ejemplo de build local para enlazar la simulacion con una casa y dispositivo concretos:
+
+```bash
+export ARDUINO_BUILD_PROPERTIES=$'build.extra_flags=-DDEVICE_ID_VALUE=12 -DHOUSE_ID_VALUE=3 -DDEVICE_HARDWARE_UID_VALUE=\"HW-WOKWI-ESP32-01\" -DINGEST_API_KEY_VALUE=\"wokwi-dev-ingest-key\"'
+./simulacion/build_wokwi_bundle.sh
+```
 
 ## Modo local y modo público
 
@@ -183,12 +201,12 @@ Para que ambos escenarios funcionen correctamente:
    - mantén `DB_RUN_MIGRATIONS=true`; cuando ya no dependas del bootstrap por `sync`, podrás pasar `DB_USE_SYNC=false`
    - para una base nueva, ejecuta primero `npm run migrate` o deja `DB_RUN_MIGRATIONS=true` en el arranque para que se cree el esquema base
 
-El repositorio deja `BACKEND_LOCAL` como valor predeterminado para facilitar las pruebas locales, pero el despliegue Railway debe usar `BACKEND_PUBLIC` y la URL real del servicio.
+El repositorio deja `BACKEND_LOCAL` como valor predeterminado para facilitar las pruebas locales. Cuando vuelvas a Railway, usa `BACKEND_PUBLIC` y la URL real del servicio.
 
 ## Notas de operacion
 
-- El frontend es publico en lectura.
-- El login solo se usa para confirmar alertas.
+- El frontend Angular es publico en lectura.
+- El login solo se usa para confirmar alertas y acceder al panel admin.
 - En local la UI vive en `http://localhost:8000/` y consume el backend por CORS.
 - Si el backend falla, el ESP32 sigue detectando fugas y actuando localmente.
 - No existe cola offline en v1: si un POST falla, se reintenta en el siguiente ciclo.
@@ -198,7 +216,7 @@ El repositorio deja `BACKEND_LOCAL` como valor predeterminado para facilitar las
 ## Despliegue separado (3 servicios)
 
 1. **Backend (Railway):** despliega `backend/` y configura `DB_*`, `JWT_SECRET`, `INGEST_API_KEY`, `FRONTEND_ORIGIN`.
-2. **Frontend (Railway o hosting estatico):** sube `frontend/` y define `PUBLIC_API_BASE_URL` con la URL publica del backend para que la build genere `dist/config.js`.
+2. **Frontend Angular (Railway o hosting estatico):** sube `frontend-angular/`, ajusta `public/app-config.js` con la URL publica del backend y ejecuta `npm run build` para generar `dist/frontend-angular`.
 3. **Simulacion (Wokwi):** usa `BACKEND_BASE_URL_PUBLIC` apuntando al backend y `INGEST_API_KEY` igual al backend.
 
 ## Railway con 3 servicios separados
@@ -209,7 +227,7 @@ Nombra los servicios exactamente asi para poder copiar y pegar las variables sin
 
 - `MySQL`
 - `backend`
-- `frontend`
+- `frontend-angular`
 
 1. **MySQL**
    - Crea una base MySQL desde Railway.
@@ -236,34 +254,33 @@ DB_NAME=${{MySQL.MYSQLDATABASE}}
 FRONTEND_ORIGIN=https://TU-FRONTEND.up.railway.app
 ```
 
-3. **Frontend**
-   - Conecta el mismo repo y establece `Root Directory` en `frontend`.
-   - Comando de inicio: deja `npm start`.
-   - Genera un dominio publico para el servicio.
-   - Variables recomendadas:
-   - Puedes copiar [frontend/.env.railway.example](/home/duvan/IOt/frontend/.env.railway.example) al Raw Editor de Railway.
+3. **Frontend Angular**
+   - Conecta el mismo repo y establece `Root Directory` en `frontend-angular`.
+   - Comando de build: `npm run build`.
+   - Comando de inicio: sirve `dist/frontend-angular` con un hosting estatico o usa `npm start` si hay un runner configurado.
+   - Antes del build, actualiza `public/app-config.js` con la URL publica del backend:
 
-```env
-PUBLIC_API_BASE_URL=https://TU-BACKEND.up.railway.app
+```js
+window.__APP_CONFIG__ = {
+  apiBaseUrl: 'https://TU-BACKEND.up.railway.app'
+};
 ```
 
 Flujo recomendado de configuracion:
 
 1. Despliega primero `MySQL`.
 2. Despliega `backend` y genera su dominio publico.
-3. Despliega `frontend` usando `PUBLIC_API_BASE_URL` apuntando al dominio publico del backend.
+3. Despliega `frontend-angular` apuntando `apiBaseUrl` al dominio publico del backend.
 4. Vuelve al `backend` y actualiza `FRONTEND_ORIGIN` con el dominio publico real del frontend.
 5. En Wokwi, configura `BACKEND_BASE_URL_PUBLIC` con el dominio del backend y la misma `INGEST_API_KEY`.
 
-Si usas exactamente los nombres `MySQL`, `backend` y `frontend`, puedes dejar las referencias cruzadas asi:
+Si usas exactamente los nombres `MySQL`, `backend` y `frontend-angular`, puedes dejar las referencias cruzadas asi:
 
-- `backend`: `DB_HOST=${{MySQL.MYSQLHOST}}`, `FRONTEND_ORIGIN=https://${{frontend.RAILWAY_PUBLIC_DOMAIN}}`
-- `frontend`: `PUBLIC_API_BASE_URL=https://${{backend.RAILWAY_PUBLIC_DOMAIN}}`
+- `backend`: `DB_HOST=${{MySQL.MYSQLHOST}}`, `FRONTEND_ORIGIN=https://${{frontend-angular.RAILWAY_PUBLIC_DOMAIN}}`
+- `frontend-angular`: usa `apiBaseUrl = 'https://${{backend.RAILWAY_PUBLIC_DOMAIN}}'` en `public/app-config.js`
 
 Pruebas minimas en Railway:
 
 - `https://TU-BACKEND.../api/health`
-- `https://TU-FRONTEND.../register/`
-- `https://TU-FRONTEND.../login/`
-- `https://TU-FRONTEND.../dashboard/`
+- `https://TU-FRONTEND.../` (SPA Angular con rutas `/login`, `/register`, `/dashboard`, `/admin`)
 - Verifica que el dashboard cargue datos y que login/register no fallen por CORS.

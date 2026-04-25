@@ -213,7 +213,7 @@ export class AdminComponent {
   readonly deviceForm = this.fb.nonNullable.group({
     id: [0],
     name: ['', [Validators.required, Validators.minLength(3)]],
-    houseId: [0, [Validators.required]],
+    houseId: [null as number | null, [Validators.required, Validators.min(1)]],
     location: ['', [Validators.required, Validators.minLength(3)]],
     status: ['ACTIVO', [Validators.required]],
     deviceType: [''],
@@ -331,7 +331,7 @@ export class AdminComponent {
         this.message.set('Casa creada correctamente.');
       }
       this.showHouseModal.set(false);
-      this.resetHouseForm(false);
+      this.resetHouseForm();
       await this.load();
     });
   }
@@ -365,7 +365,7 @@ export class AdminComponent {
         this.message.set('Usuario creado correctamente.');
       }
       this.showUserModal.set(false);
-      this.resetUserForm(false);
+      this.resetUserForm();
       await this.load();
     });
   }
@@ -380,7 +380,7 @@ export class AdminComponent {
     const raw = this.deviceForm.getRawValue();
     const body: Record<string, unknown> = {
       name: raw.name.trim(),
-      houseId: raw.houseId,
+      houseId: raw.houseId ?? undefined,
       location: raw.location.trim(),
       status: raw.status,
       deviceType: raw.deviceType.trim() || undefined,
@@ -397,7 +397,7 @@ export class AdminComponent {
         this.message.set('Dispositivo creado correctamente.');
       }
       this.showDeviceModal.set(false);
-      this.resetDeviceForm(false);
+      this.resetDeviceForm();
       await this.load();
     });
   }
@@ -431,7 +431,7 @@ export class AdminComponent {
     this.deviceForm.setValue({
       id: device.id,
       name: device.name,
-      houseId: device.House?.id || 0,
+      houseId: device.House?.id || null,
       location: device.location || '',
       status: device.status || 'ACTIVO',
       deviceType: device.device_type || '',
@@ -480,7 +480,12 @@ export class AdminComponent {
     });
   }
 
-  protected resetHouseForm(openModal = true) {
+  protected openCreateHouseModal() {
+    this.resetHouseForm();
+    this.showHouseModal.set(true);
+  }
+
+  protected resetHouseForm() {
     this.houseForm.reset({
       id: 0,
       name: '',
@@ -489,10 +494,14 @@ export class AdminComponent {
       contact_phone: '',
       status: 'ACTIVA'
     });
-    this.showHouseModal.set(openModal);
   }
 
-  protected resetUserForm(openModal = true) {
+  protected openCreateUserModal() {
+    this.resetUserForm();
+    this.showUserModal.set(true);
+  }
+
+  protected resetUserForm() {
     this.userForm.reset({
       id: 0,
       nombre: '',
@@ -501,21 +510,24 @@ export class AdminComponent {
       houseId: 0,
       role: 'resident'
     });
-    this.showUserModal.set(openModal);
   }
 
-  protected resetDeviceForm(openModal = true) {
+  protected openCreateDeviceModal() {
+    this.resetDeviceForm();
+    this.showDeviceModal.set(true);
+  }
+
+  protected resetDeviceForm() {
     this.deviceForm.reset({
       id: 0,
       name: '',
-      houseId: 0,
+      houseId: null,
       location: '',
       status: 'ACTIVO',
       deviceType: '',
       firmwareVersion: '',
       hardwareUid: ''
     });
-    this.showDeviceModal.set(openModal);
   }
 
   protected readonly trackById = (_index: number, item: { id: number }) => item.id;

@@ -1,54 +1,122 @@
 <section class="dashboard-page">
-  <section class="dashboard-tabs glass-panel">
-    <div class="dashboard-tabs__rail">
-      <button
-        type="button"
-        class="dashboard-tabs__arrow"
-        [disabled]="!canScrollTabsLeft()"
-        (click)="scrollTabs('left')"
-        aria-label="Ver pestañas anteriores"
-      >
-        ‹
-      </button>
+  <section class="dashboard-controls glass-panel" [class.dashboard-controls--split]="hasMultipleDevices()">
+    @if (hasMultipleDevices()) {
+      <div class="dashboard-control-row dashboard-control-row--devices">
+        <span class="dashboard-control-label">Dispositivos</span>
+        <div class="dashboard-tabs__rail">
+          <button
+            type="button"
+            class="dashboard-tabs__arrow"
+            [disabled]="!canScrollDeviceTabsLeft()"
+            (click)="scrollDeviceTabs('left')"
+            aria-label="Ver dispositivos anteriores"
+          >
+            ‹
+          </button>
 
-      <div
-        class="dashboard-tabs__viewport"
-        [class.dashboard-tabs__viewport--left]="canScrollTabsLeft()"
-        [class.dashboard-tabs__viewport--right]="canScrollTabsRight()"
-        #tabsScroller
-        (scroll)="onTabsScroll()"
-      >
-        <div class="dashboard-tabs__strip">
-          @for (tab of tabs; track tab.id) {
-            <button
-              type="button"
-              class="dashboard-tab"
-              [class.dashboard-tab--active]="activeTab() === tab.id"
-              (click)="changeTab(tab.id)"
-            >
-              <div class="dashboard-tab__title">
-                <strong>{{ tab.label }}</strong>
-                @if (tabBadge(tab.id); as badge) {
-                  <span class="dashboard-tab__badge" [class.dashboard-tab__badge--alert]="tab.id === 'alerts' && badge > 0">
-                    {{ badge }}
-                  </span>
-                }
-              </div>
-              <span>{{ tab.detail }}</span>
-            </button>
-          }
+          <div
+            class="dashboard-tabs__viewport"
+            [class.dashboard-tabs__viewport--left]="canScrollDeviceTabsLeft()"
+            [class.dashboard-tabs__viewport--right]="canScrollDeviceTabsRight()"
+            #deviceTabsScroller
+            (scroll)="onDeviceTabsScroll()"
+          >
+            <div class="dashboard-tabs__strip">
+              <button
+                type="button"
+                class="dashboard-tab dashboard-tab--device"
+                [class.dashboard-tab--active]="selectedDeviceId() === null"
+                (click)="selectDevice(null)"
+              >
+                <div class="dashboard-tab__title">
+                  <strong>Todos</strong>
+                </div>
+                <span>{{ uniqueDevices().length }} dispositivos</span>
+              </button>
+              @for (device of uniqueDevices(); track device.id) {
+                <button
+                  type="button"
+                  class="dashboard-tab dashboard-tab--device"
+                  [class.dashboard-tab--active]="selectedDeviceId() === device.id"
+                  (click)="selectDevice(device.id)"
+                >
+                  <div class="dashboard-tab__title">
+                    <strong>{{ device.name || 'Disp #' + device.id }}</strong>
+                    <span class="dashboard-tab__badge" [class.dashboard-tab__badge--alert]="device.lastState === 'FUGA' || device.lastState === 'ALERTA'">
+                      {{ device.lastState }}
+                    </span>
+                  </div>
+                  <span>{{ device.houseName || 'Sin casa' }}</span>
+                </button>
+              }
+            </div>
+          </div>
+
+          <button
+            type="button"
+            class="dashboard-tabs__arrow"
+            [disabled]="!canScrollDeviceTabsRight()"
+            (click)="scrollDeviceTabs('right')"
+            aria-label="Ver dispositivos siguientes"
+          >
+            ›
+          </button>
         </div>
       </div>
+    }
 
-      <button
-        type="button"
-        class="dashboard-tabs__arrow"
-        [disabled]="!canScrollTabsRight()"
-        (click)="scrollTabs('right')"
-        aria-label="Ver pestañas siguientes"
-      >
-        ›
-      </button>
+    <div class="dashboard-control-row">
+      <span class="dashboard-control-label">Vista</span>
+      <div class="dashboard-tabs__rail">
+        <button
+          type="button"
+          class="dashboard-tabs__arrow"
+          [disabled]="!canScrollTabsLeft()"
+          (click)="scrollTabs('left')"
+          aria-label="Ver pestañas anteriores"
+        >
+          ‹
+        </button>
+
+        <div
+          class="dashboard-tabs__viewport"
+          [class.dashboard-tabs__viewport--left]="canScrollTabsLeft()"
+          [class.dashboard-tabs__viewport--right]="canScrollTabsRight()"
+          #tabsScroller
+          (scroll)="onTabsScroll()"
+        >
+          <div class="dashboard-tabs__strip">
+            @for (tab of tabs; track tab.id) {
+              <button
+                type="button"
+                class="dashboard-tab"
+                [class.dashboard-tab--active]="activeTab() === tab.id"
+                (click)="changeTab(tab.id)"
+              >
+                <div class="dashboard-tab__title">
+                  <strong>{{ tab.label }}</strong>
+                  @if (tabBadge(tab.id); as badge) {
+                    <span class="dashboard-tab__badge" [class.dashboard-tab__badge--alert]="tab.id === 'alerts' && badge > 0">
+                      {{ badge }}
+                    </span>
+                  }
+                </div>
+                <span>{{ tab.detail }}</span>
+              </button>
+            }
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="dashboard-tabs__arrow"
+          [disabled]="!canScrollTabsRight()"
+          (click)="scrollTabs('right')"
+          aria-label="Ver pestañas siguientes"
+        >
+          ›
+        </button>
+      </div>
     </div>
   </section>
 
@@ -61,7 +129,7 @@
           Angular ahora actua como cockpit operativo: consume snapshot, abre SSE y eleva las alertas sin perder el tono visual del sistema.
         </p>
         <div class="hero-ribbon">
-          <span>Estado {{ payload()?.currentState || 'SIN_DATOS' }}</span>
+          <span>Estado {{ currentState() }}</span>
           <span>{{ connectionLabel() }}</span>
           <span>{{ lastPacketLabel() }}</span>
         </div>
@@ -74,11 +142,11 @@
         </div>
         <div class="status-card">
           <span>Estado</span>
-          <strong>{{ payload()?.currentState || 'SIN_DATOS' }}</strong>
+          <strong>{{ currentState() }}</strong>
         </div>
         <div class="status-card">
           <span>Ultimo evento</span>
-          <strong>{{ payload()?.lastSeenAt ? (payload()?.lastSeenAt | date:'short') : '--' }}</strong>
+          <strong>{{ scopedLastSeenAt() ? (scopedLastSeenAt() | date:'short') : '--' }}</strong>
         </div>
         <div class="status-card status-card--pulse">
           <span>Alertas activas</span>
@@ -95,20 +163,20 @@
       </div>
     </header>
 
-    @if (payload()?.currentState === 'FUGA' || payload()?.currentState === 'ALERTA') {
+    @if (currentState() === 'FUGA' || currentState() === 'ALERTA') {
       <section class="critical-banner" [attr.data-tone]="heroTone()">
         <div>
           <span class="eyebrow">Intervencion</span>
-          <h2>{{ payload()?.currentState === 'FUGA' ? 'Fuga confirmada en el circuito' : 'Anomalia sostenida detectada' }}</h2>
+          <h2>{{ currentState() === 'FUGA' ? 'Fuga confirmada en el circuito' : 'Anomalia sostenida detectada' }}</h2>
           <p>
-            {{ latestReading()?.deviceName || 'Dispositivo principal' }} reporta
-            {{ latestReading()?.pressure_kpa ?? 0 | number:'1.0-1' }} kPa y
-            {{ latestReading()?.flow_lmin ?? 0 | number:'1.0-2' }} L/min.
+            {{ highlightedReading()?.deviceName || highlightedDevice()?.name || 'Dispositivo' }} reporta
+            {{ highlightedReading()?.pressure_kpa ?? 0 | number:'1.0-1' }} kPa y
+            {{ highlightedReading()?.flow_lmin ?? 0 | number:'1.0-2' }} L/min.
           </p>
         </div>
         <div class="critical-banner__stat">
           <span>Riesgo</span>
-          <strong>{{ latestReading()?.risk ?? 0 }}%</strong>
+          <strong>{{ highlightedReading()?.risk ?? 0 }}%</strong>
         </div>
       </section>
     }
@@ -123,7 +191,50 @@
           </article>
         }
       </section>
+    } @else if (hasMultipleDevices() && selectedDeviceId() === null) {
+      <!-- Todos: show device cards grid -->
+      <section class="device-cards-grid">
+        @for (card of deviceCards(); track card.device.id) {
+          <article class="device-card glass-panel" [attr.data-state]="card.state" (click)="selectDevice(card.device.id)">
+            <header class="device-card__header">
+              <div>
+                <span class="eyebrow">{{ card.device.houseName || 'Sin casa' }}</span>
+                <h3>{{ card.device.name || 'Dispositivo #' + card.device.id }}</h3>
+              </div>
+              <span class="device-card__state" [attr.data-state]="card.state">{{ card.state }}</span>
+            </header>
+            <div class="device-card__metrics">
+              <div>
+                <span>Caudal</span>
+                <strong>{{ card.flow | number:'1.0-2' }}</strong>
+                <small>L/min</small>
+              </div>
+              <div>
+                <span>Presion</span>
+                <strong>{{ card.pressure | number:'1.0-2' }}</strong>
+                <small>kPa</small>
+              </div>
+              <div>
+                <span>Riesgo</span>
+                <strong>{{ card.risk }}</strong>
+                <small>%</small>
+              </div>
+              <div>
+                <span>Enlace</span>
+                <strong>{{ card.isOnline ? 'Online' : 'Observacion' }}</strong>
+                <small>{{ relativeTime(card.device.lastTs) }}</small>
+              </div>
+            </div>
+            <div class="device-card__risk-bar">
+              <div class="risk-meter__track">
+                <div class="risk-meter__fill" [style.width.%]="Math.min(card.risk, 100)"></div>
+              </div>
+            </div>
+          </article>
+        }
+      </section>
     } @else {
+      <!-- Single device metrics -->
       <section class="metrics-grid">
         <article class="metric-card glass-panel">
           <span>Caudal</span>
@@ -232,11 +343,11 @@
             <div class="command-list">
               <div class="command-item">
                 <span>Casa activa</span>
-                <strong>{{ latestReading()?.houseName || payload()?.latestReading?.houseName || 'No asignada' }}</strong>
+                <strong>{{ deviceHealth().houseName || latestReading()?.houseName || payload()?.latestReading?.houseName || 'No asignada' }}</strong>
               </div>
               <div class="command-item">
                 <span>Dispositivo online</span>
-                <strong>{{ payload()?.deviceOnline ? 'Si' : 'No' }}</strong>
+                <strong>{{ scopedDeviceOnline() ? 'Si' : 'No' }}</strong>
               </div>
               <div class="command-item">
                 <span>Ultimo paquete</span>
